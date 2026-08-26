@@ -1,0 +1,56 @@
+{
+  "name": "Transaction",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "title": "User Email"
+    },
+    "phone_number": {
+      "type": "string",
+      "title": "M-Pesa Phone Number"
+    },
+    "amount": {
+      "type": "number",
+      "title": "Amount (KES)"
+    },
+    "mpesa_receipt": {
+      "type": "string",
+      "title": "M-Pesa Receipt Code"
+    },
+    "service_type": {
+      "type": "string",
+      "enum": [
+        "basic_listing",
+        "premium_listing",
+        "detail_request"
+      ],
+      "title": "Service Purchased"
+    },
+    "reference_id": {
+      "type": "string",
+      "title": "Reference ID (Listing/Request)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "successful",
+        "failed",
+        "refunded"
+      ],
+      "default": "pending",
+      "title": "Payment Status"
+    },
+    "description": {
+      "type": "string",
+      "title": "Transaction Description"
+    }
+  },
+  "required": [
+    "user_email",
+    "amount",
+    "service_type",
+    "status"
+  ]
+}

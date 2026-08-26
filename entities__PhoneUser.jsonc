@@ -1,0 +1,78 @@
+{
+  "name": "PhoneUser",
+  "type": "object",
+  "properties": {
+    "phone_number": {
+      "type": "string",
+      "title": "Phone Number (E.164)"
+    },
+    "full_name": {
+      "type": "string",
+      "title": "Full Name"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "buyer",
+        "seller",
+        "admin",
+        "guest"
+      ],
+      "default": "buyer",
+      "title": "Role"
+    },
+    "is_verified": {
+      "type": "boolean",
+      "default": false,
+      "title": "Phone Verified"
+    },
+    "pin": {
+      "type": "string",
+      "title": "4-digit Login PIN (hashed)"
+    },
+    "has_pin": {
+      "type": "boolean",
+      "default": false,
+      "title": "Has Set a PIN"
+    },
+    "bio": {
+      "type": "string",
+      "title": "Bio (private)"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "male",
+        "female",
+        "other",
+        "prefer_not_to_say"
+      ],
+      "title": "Gender (private)"
+    },
+    "county": {
+      "type": "string",
+      "title": "County (private)"
+    },
+    "subcounty": {
+      "type": "string",
+      "title": "Sub-county (private)"
+    },
+    "profile_picture": {
+      "type": "string",
+      "title": "Profile Picture URL"
+    },
+    "failed_login_attempts": {
+      "type": "number",
+      "default": 0,
+      "title": "Failed PIN Login Attempts"
+    },
+    "pin_locked_until": {
+      "type": "string",
+      "format": "date-time",
+      "title": "PIN Lockout Expiry"
+    }
+  },
+  "required": [
+    "phone_number"
+  ]
+}

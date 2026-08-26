@@ -1,0 +1,72 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "seller",
+        "buyer"
+      ],
+      "default": "buyer"
+    },
+    "phone": {
+      "type": "string",
+      "title": "Phone Number"
+    },
+    "county": {
+      "type": "string",
+      "title": "County"
+    },
+    "national_id": {
+      "type": "string",
+      "title": "National ID/Passport"
+    },
+    "selfie_url": {
+      "type": "string",
+      "title": "Selfie Photo"
+    },
+    "id_document_url": {
+      "type": "string",
+      "title": "ID Document Upload"
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "pending",
+        "approved",
+        "rejected",
+        "suspended"
+      ],
+      "default": "unverified"
+    },
+    "business_docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Business Ownership Documents"
+    },
+    "bio": {
+      "type": "string",
+      "title": "Bio"
+    },
+    "phone_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "email_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "favorites": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Favorite Listings"
+    }
+  }
+}

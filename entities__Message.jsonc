@@ -1,0 +1,36 @@
+{
+  "name": "Message",
+  "type": "object",
+  "properties": {
+    "sender_email": {
+      "type": "string",
+      "title": "Sender Email"
+    },
+    "receiver_email": {
+      "type": "string",
+      "title": "Receiver Email"
+    },
+    "listing_id": {
+      "type": "string",
+      "title": "Related Listing ID"
+    },
+    "content": {
+      "type": "string",
+      "title": "Message Content"
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false,
+      "title": "Read Status"
+    },
+    "attachment_url": {
+      "type": "string",
+      "title": "Attachment URL"
+    }
+  },
+  "required": [
+    "sender_email",
+    "receiver_email",
+    "content"
+  ]
+}

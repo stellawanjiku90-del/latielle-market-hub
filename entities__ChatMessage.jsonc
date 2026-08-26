@@ -1,0 +1,53 @@
+{
+  "name": "ChatMessage",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string",
+      "title": "Conversation ID"
+    },
+    "sender_email": {
+      "type": "string",
+      "title": "Sender Email"
+    },
+    "sender_name": {
+      "type": "string",
+      "title": "Sender Name"
+    },
+    "sender_role": {
+      "type": "string",
+      "enum": [
+        "buyer",
+        "seller",
+        "admin",
+        "ai"
+      ],
+      "title": "Sender Role"
+    },
+    "content": {
+      "type": "string",
+      "title": "Message Content"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Attachment URLs"
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false,
+      "title": "Read"
+    },
+    "is_deleted": {
+      "type": "boolean",
+      "default": false,
+      "title": "Removed by Admin"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "sender_email"
+  ]
+}

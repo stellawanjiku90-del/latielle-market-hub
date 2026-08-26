@@ -1,0 +1,59 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "buyer_seller",
+        "support"
+      ],
+      "title": "Type"
+    },
+    "buyer_email": {
+      "type": "string",
+      "title": "Buyer Email"
+    },
+    "seller_email": {
+      "type": "string",
+      "title": "Seller Email"
+    },
+    "listing_id": {
+      "type": "string",
+      "title": "Listing ID"
+    },
+    "listing_title": {
+      "type": "string",
+      "title": "Listing Title"
+    },
+    "detail_request_id": {
+      "type": "string",
+      "title": "Detail Request ID"
+    },
+    "last_message": {
+      "type": "string",
+      "title": "Last Message Preview"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last Message At"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "closed"
+      ],
+      "default": "active",
+      "title": "Status"
+    },
+    "admin_note": {
+      "type": "string",
+      "title": "Admin Private Note"
+    }
+  },
+  "required": [
+    "type"
+  ]
+}

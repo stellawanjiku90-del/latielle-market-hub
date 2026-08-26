@@ -1,0 +1,45 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "recipient": {
+      "type": "string",
+      "title": "Recipient Identifier (phone/email)"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "chat_opened",
+        "new_message",
+        "warning",
+        "general"
+      ],
+      "default": "general",
+      "title": "Notification Type"
+    },
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "body": {
+      "type": "string",
+      "title": "Body"
+    },
+    "link": {
+      "type": "string",
+      "title": "In-app Link"
+    },
+    "conversation_id": {
+      "type": "string",
+      "title": "Related Conversation ID"
+    },
+    "is_read": {
+      "type": "boolean",
+      "default": false,
+      "title": "Read"
+    }
+  },
+  "required": [
+    "recipient"
+  ]
+}

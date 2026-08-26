@@ -1,0 +1,97 @@
+{
+  "name": "DetailRequest",
+  "type": "object",
+  "properties": {
+    "listing_id": {
+      "type": "string",
+      "title": "Business Listing ID"
+    },
+    "buyer_email": {
+      "type": "string",
+      "title": "Buyer Email"
+    },
+    "seller_email": {
+      "type": "string",
+      "title": "Seller Email"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_payment",
+        "paid",
+        "pending_approval",
+        "approved",
+        "responded",
+        "rejected"
+      ],
+      "default": "pending_payment",
+      "title": "Request Status"
+    },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "unpaid",
+        "pending",
+        "paid",
+        "failed"
+      ],
+      "default": "unpaid",
+      "title": "Payment Status"
+    },
+    "amount_paid": {
+      "type": "number",
+      "title": "Amount Paid (KES)"
+    },
+    "mpesa_receipt": {
+      "type": "string",
+      "title": "M-Pesa Receipt Code"
+    },
+    "checkout_request_id": {
+      "type": "string",
+      "title": "M-Pesa Checkout Request ID"
+    },
+    "message": {
+      "type": "string",
+      "title": "Message to Seller"
+    },
+    "listing_title": {
+      "type": "string",
+      "title": "Listing Title"
+    },
+    "admin_response": {
+      "type": "string",
+      "title": "Latest Admin Response Sent to Buyer"
+    },
+    "rejection_reason": {
+      "type": "string",
+      "title": "Rejection Reason"
+    },
+    "response_history": {
+      "type": "array",
+      "title": "Response History",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "responded_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Responded At"
+    }
+  },
+  "required": [
+    "listing_id",
+    "buyer_email"
+  ]
+}

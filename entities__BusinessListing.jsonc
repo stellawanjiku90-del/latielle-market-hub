@@ -1,0 +1,195 @@
+{
+  "name": "BusinessListing",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Business Title"
+    },
+    "category": {
+      "type": "string",
+      "title": "Business Category"
+    },
+    "county": {
+      "type": "string",
+      "title": "County"
+    },
+    "asking_price": {
+      "type": "number",
+      "title": "Asking Price (KES)"
+    },
+    "years_operating": {
+      "type": "number",
+      "title": "Years Operating"
+    },
+    "monthly_gross_sales": {
+      "type": "string",
+      "title": "Monthly Gross Sales Range"
+    },
+    "monthly_net_sales": {
+      "type": "string",
+      "title": "Monthly Net Sales / Profit Range"
+    },
+    "financial_records_available": {
+      "type": "string",
+      "enum": [
+        "yes_full",
+        "yes_partial",
+        "no",
+        "upon_request"
+      ],
+      "title": "Financial Records Available"
+    },
+    "employees": {
+      "type": "number",
+      "title": "Number of Employees"
+    },
+    "reason_for_selling": {
+      "type": "string",
+      "title": "Reason for Selling"
+    },
+    "description": {
+      "type": "string",
+      "title": "Business Description"
+    },
+    "photos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Business Photos (Public)"
+    },
+    "videos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Business Videos (Public)"
+    },
+    "video_url": {
+      "type": "string",
+      "title": "Video URL (legacy)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pending",
+        "approved",
+        "rejected",
+        "suspended",
+        "sold"
+      ],
+      "default": "draft",
+      "title": "Listing Status"
+    },
+    "sold_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Date Sold"
+    },
+    "sold_price": {
+      "type": "number",
+      "title": "Final Sale Price (KES)"
+    },
+    "listing_type": {
+      "type": "string",
+      "enum": [
+        "basic",
+        "featured",
+        "premium"
+      ],
+      "default": "basic",
+      "title": "Listing Type"
+    },
+    "is_featured": {
+      "type": "boolean",
+      "default": false,
+      "title": "Featured Listing"
+    },
+    "is_verified": {
+      "type": "boolean",
+      "default": false,
+      "title": "Verified by Admin (Documents Confirmed)"
+    },
+    "exact_location": {
+      "type": "string",
+      "title": "Exact Business Location (Confidential)"
+    },
+    "location_lat": {
+      "type": "number",
+      "title": "Latitude (Confidential)"
+    },
+    "location_lng": {
+      "type": "number",
+      "title": "Longitude (Confidential)"
+    },
+    "business_licence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Business Licence Documents (Confidential)"
+    },
+    "registration_cert": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Business Registration Certificate (Confidential)"
+    },
+    "owner_id_docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Owner National ID / Driving Licence (Confidential)"
+    },
+    "financial_docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Financial Documents (Confidential)"
+    },
+    "supplier_info": {
+      "type": "string",
+      "title": "Supplier Information (Confidential)"
+    },
+    "staff_info": {
+      "type": "string",
+      "title": "Staff Information (Confidential)"
+    },
+    "lease_docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Lease Documents (Confidential)"
+    },
+    "seller_phone": {
+      "type": "string",
+      "title": "Seller Phone (Confidential)"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Listing Expiry Date"
+    },
+    "admin_notes": {
+      "type": "string",
+      "title": "Admin Review Notes"
+    },
+    "views_count": {
+      "type": "number",
+      "default": 0,
+      "title": "View Count"
+    }
+  },
+  "required": [
+    "category",
+    "county",
+    "asking_price",
+    "description"
+  ]
+}

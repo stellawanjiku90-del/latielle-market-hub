@@ -1,0 +1,46 @@
+{
+  "name": "BuyerPreference",
+  "type": "object",
+  "properties": {
+    "buyer_email": {
+      "type": "string",
+      "title": "Buyer Email"
+    },
+    "buyer_name": {
+      "type": "string",
+      "title": "Buyer Name"
+    },
+    "counties": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Preferred Counties"
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Preferred Categories (empty = any)"
+    },
+    "min_budget": {
+      "type": "number",
+      "title": "Minimum Budget (KES)"
+    },
+    "max_budget": {
+      "type": "number",
+      "title": "Maximum Budget (KES)"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "title": "Notifications Active"
+    }
+  },
+  "required": [
+    "buyer_email",
+    "counties",
+    "max_budget"
+  ]
+}

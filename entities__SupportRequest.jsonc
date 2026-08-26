@@ -1,0 +1,52 @@
+{
+  "name": "SupportRequest",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "title": "User Email"
+    },
+    "user_name": {
+      "type": "string",
+      "title": "User Name"
+    },
+    "message": {
+      "type": "string",
+      "title": "User Message"
+    },
+    "conversation_summary": {
+      "type": "string",
+      "title": "Full Chat Summary"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "ai_chat",
+        "human_request"
+      ],
+      "default": "ai_chat",
+      "title": "Request Type"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "resolved"
+      ],
+      "default": "open",
+      "title": "Status"
+    },
+    "conversation_id": {
+      "type": "string",
+      "title": "Linked Conversation ID"
+    },
+    "admin_notes": {
+      "type": "string",
+      "title": "Admin Notes"
+    }
+  },
+  "required": [
+    "message"
+  ]
+}
