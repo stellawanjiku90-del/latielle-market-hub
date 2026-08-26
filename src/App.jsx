@@ -6,7 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import OfflineGate from '@/components/OfflineGate';
 import { AuthProvider } from '@/lib/AuthContext';
-import Layout from './components/Layout';
+import Layout from './components/Layout.jsx';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
