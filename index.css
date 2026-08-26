@@ -1,0 +1,157 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 180 7% 92%;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+    --primary: 36 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 213 17% 19%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 97%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 220 6% 93%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 180 5% 84%;
+    --input: 180 5% 84%;
+    --ring: 36 100% 50%;
+    --chart-1: 36 100% 50%;
+    --chart-2: 50 100% 54%;
+    --chart-3: 214 27% 20%;
+    --chart-4: 189 100% 26%;
+    --chart-5: 12 96% 36%;
+    --radius: 0.5rem;
+    --navy: 214 27% 10%;
+    --navy-light: 213 17% 19%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 7%;
+    --sidebar-primary: 36 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 6% 93%;
+    --sidebar-accent-foreground: 0 0% 7%;
+    --sidebar-border: 180 5% 84%;
+    --sidebar-ring: 36 100% 50%;
+    --font-heading: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  .dark {
+    --background: 214 27% 8%;
+    --foreground: 0 0% 95%;
+    --card: 214 25% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 214 25% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 36 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 213 17% 19%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 214 20% 16%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 214 20% 18%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 20% 20%;
+    --input: 214 20% 20%;
+    --ring: 36 100% 50%;
+    --chart-1: 36 100% 50%;
+    --chart-2: 50 100% 54%;
+    --chart-3: 214 27% 30%;
+    --chart-4: 189 100% 36%;
+    --chart-5: 12 96% 46%;
+    --navy: 214 27% 10%;
+    --navy-light: 213 17% 19%;
+    --sidebar-background: 214 25% 10%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 36 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 20% 16%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 214 20% 20%;
+    --sidebar-ring: 36 100% 50%;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent rubber-banding on the html element too */
+  html {
+    overscroll-behavior: none;
+  }
+
+  /* Buttons, tabs, icons: no text selection */
+  button, [role="tab"], [role="button"], a, label {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Safe area padding utilities */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Smooth page transition */
+@keyframes pageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.page-transition {
+  animation: pageSlideIn 0.22s ease-out;
+}
+
+/* On mobile, add bottom padding so content clears the bottom nav + safe area */
+@media (max-width: 767px) {
+  main {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  /* Prevent iOS auto-zoom on focus — inputs must be at least 16px */
+  input, textarea, select, [role="combobox"] {
+    font-size: 16px !important;
+  }
+
+  /* Ergonomic touch targets for buttons and selects */
+  button, [role="button"], [role="option"], [role="tab"] {
+    min-height: 44px;
+  }
+
+  /* Tighter tap feedback */
+  button:active, [role="button"]:active {
+    opacity: 0.75;
+    transform: scale(0.97);
+    transition: transform 0.08s ease, opacity 0.08s ease;
+  }
+}
