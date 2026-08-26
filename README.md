@@ -1,33 +1,20 @@
 # Latielle Market Hub
 
-React + Vite marketplace application.
+Production-oriented React/Vite marketplace frontend with a Base44 server backend.
 
-## Project layout
-
-- `src/` — frontend source code
-- `public/` — static browser assets
-- `data/` — flat backend/data export, with no subfolders
-- root files — npm, Vite, Tailwind, and deployment configuration
-
-## Run locally
+## Quick start
 
 ```bash
-npm install
+cp .env.example .env
+npm ci
 npm run dev
 ```
 
-## Production build
+## Validate
 
 ```bash
+npm run lint
 npm run build
 ```
 
-## Render
-
-Use a Static Site:
-
-- Build Command: `npm install && npm run build`
-- Publish Directory: `dist`
-- Root Directory: leave blank
-
-Do not expose payment or SMS secrets as `VITE_` variables.
+See `PRODUCTION_READINESS.md` for the deployment checklist and required external configuration.
