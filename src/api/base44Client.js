@@ -120,4 +120,34 @@ export const base44 = {
   },
 };
 
+
+
+function listingFromLegacy(data) {
+  return data;
+}
+
+const BusinessListing = {
+  async list() { return request('/listings'); },
+  async filter(filters = {}) {
+    const rows = await request('/listings');
+    return rows.filter(row => Object.entries(filters).every(([k,v]) => row[k] === v));
+  },
+  async get(id) { return request(`/listings/${id}`); },
+  async create(data) { return request('/listings', {method:'POST', body:JSON.stringify(listingFromLegacy(data))}); },
+  async update(id,data) { return request(`/listings/${id}`, {method:'PATCH', body:JSON.stringify(data)}); },
+  async delete(id) { return request(`/listings/${id}`, {method:'DELETE'}); }
+};
+
+const unsupportedEntity = {
+  async list(){ return []; }, async filter(){ return []; }, async create(data){ return data; },
+  async update(_id,data){ return data; }, async delete(){ return true; }
+};
+
+base44.auth.isAuthenticated = async () => !!getToken();
+base44.auth.redirectToLogin = () => { window.location.assign('/login'); };
+base44.entities = new Proxy({ BusinessListing }, { get(target, prop) { return target[prop] || unsupportedEntity; } });
+base44.asServiceRole = { entities: base44.entities };
+base44.integrations = { Core: { async InvokeLLM() { return "Support chat is currently unavailable. Please email realityofafrica2023@gmail.com for assistance."; } } };
+base44.functions = new Proxy({}, { get: () => ({ async invoke(){ return {}; } }) });
+
 export { request };
