@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api, apiFunction } from "@/api/apiClient";
 import { getSession, redirectToLogin } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,11 +159,11 @@ export default function CreateListing() {
       exact_location: form.exact_location || [form.town, form.sub_county, form.county].filter(Boolean).join(", "),
       status: asDraft ? "draft" : "pending",
     };
-    const listing = await base44.entities.BusinessListing.create(data);
+    const listing = await api.entities.BusinessListing.create(data);
 
     if (!asDraft) {
       const fee = LISTING_FEES[form.listing_type] || 2000;
-      const res = await base44.functions.invoke('mpesaStkPush', {
+      const res = await apiFunction('mpesaStkPush', {
         phone: paymentPhone.trim(),
         amount: fee,
         detailRequestId: listing.id,

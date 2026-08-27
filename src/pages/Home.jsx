@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Star, LogIn, UserPlus, ShieldCheck, TrendingUp, CheckCircle2 } from "lucide-react";
@@ -20,7 +20,7 @@ export default function Home() {
   const [user] = useState(() => getSession());
 
   useEffect(() => {
-    base44.entities.BusinessListing.filter({ status: "approved" }, "-created_date", 6)
+    api.entities.BusinessListing.filter({ status: "approved" }, "-created_date", 6)
       .then(setFeatured)
       .catch(() => {})
       .finally(() => setLoading(false));

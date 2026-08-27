@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { api, apiFunction } from "@/api/apiClient";
 import { getSession, redirectToLogin } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,13 +45,13 @@ export default function AdminDashboard() {
       if (session.role !== "admin") { window.location.href = "/"; return; }
       setUser(session);
       const [u, l, t, r, c, s, dr] = await Promise.all([
-        base44.entities.PhoneUser.list("-created_date", 200),
-        base44.entities.BusinessListing.list("-created_date", 50),
-        base44.entities.Transaction.list("-created_date", 50),
-        base44.entities.Report.list("-created_date", 50),
-        base44.entities.Conversation.list("-last_message_at", 100),
-        base44.entities.SupportRequest.list("-created_date", 100),
-        base44.entities.DetailRequest.list("-created_date", 100),
+        api.entities.PhoneUser.list("-created_date", 200),
+        api.entities.BusinessListing.list("-created_date", 50),
+        api.entities.Transaction.list("-created_date", 50),
+        api.entities.Report.list("-created_date", 50),
+        api.entities.Conversation.list("-last_message_at", 100),
+        api.entities.SupportRequest.list("-created_date", 100),
+        api.entities.DetailRequest.list("-created_date", 100),
       ]);
       setUsers(u); setListings(l); setTransactions(t); setReports(r); setConversations(c); setSupportRequests(s);
       // Only show requests where the buyer has actually paid (not abandoned/unpaid)
@@ -64,7 +64,7 @@ export default function AdminDashboard() {
   const saveAdminNote = async (convId) => {
     const note = adminNotes[convId];
     if (!note?.trim()) return;
-    await base44.entities.Conversation.update(convId, { admin_note: note });
+    await api.entities.Conversation.update(convId, { admin_note: note });
     toast.success("Note saved");
   };
 
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
     setListings(prev => prev.map(l => l.id === id ? { ...l, status: "approved" } : l));
     setReviewListing(null);
     toast.success("Listing approved");
-    base44.entities.BusinessListing.update(id, { status: "approved", admin_notes: "" }).catch(() => {
+    api.entities.BusinessListing.update(id, { status: "approved", admin_notes: "" }).catch(() => {
       setListings(prev => prev.map(l => l.id === id ? { ...l, status: "pending" } : l));
       toast.error("Action failed. Please try again.");
     });
@@ -82,7 +82,7 @@ export default function AdminDashboard() {
     setListings(prev => prev.map(l => l.id === id ? { ...l, status: "rejected", admin_notes: reason } : l));
     setReviewListing(null);
     toast.success("Listing rejected");
-    base44.entities.BusinessListing.update(id, { status: "rejected", admin_notes: reason }).catch(() => {
+    api.entities.BusinessListing.update(id, { status: "rejected", admin_notes: reason }).catch(() => {
       setListings(prev => prev.map(l => l.id === id ? { ...l, status: "pending" } : l));
       toast.error("Action failed. Please try again.");
     });
@@ -94,13 +94,13 @@ export default function AdminDashboard() {
     setDetailRequests(prev => prev.map(d => d.id === id ? { ...d, status: "approved" } : d));
     setReviewRequest(null);
     try {
-      await base44.entities.DetailRequest.update(id, { status: "approved", responded_at: new Date().toISOString() });
+      await api.entities.DetailRequest.update(id, { status: "approved", responded_at: new Date().toISOString() });
 
       // Create the buyer-seller conversation (only if one doesn't already exist)
-      const existing = await base44.entities.Conversation.filter({ detail_request_id: id, type: "buyer_seller" }, "-created_date", 1);
+      const existing = await api.entities.Conversation.filter({ detail_request_id: id, type: "buyer_seller" }, "-created_date", 1);
       let conv = existing[0];
       if (!conv) {
-        conv = await base44.entities.Conversation.create({
+        conv = await api.entities.Conversation.create({
           type: "buyer_seller",
           buyer_email: req.buyer_email,
           seller_email: req.seller_email,
@@ -113,14 +113,14 @@ export default function AdminDashboard() {
       }
 
       // Notify both seller and buyer in-app
-      base44.functions.invoke('createNotification', {
+      apiFunction('createNotification', {
         recipient: req.seller_email,
         type: "chat_opened",
         title: "New buyer connected",
         body: `A buyer's request for "${req.listing_title || "your business"}" was approved. You can now chat with them.`,
         conversationId: conv.id,
       }).catch(() => {});
-      base44.functions.invoke('createNotification', {
+      apiFunction('createNotification', {
         recipient: req.buyer_email,
         type: "chat_opened",
         title: "Request approved",
@@ -142,8 +142,8 @@ export default function AdminDashboard() {
     setDetailRequests(prev => prev.map(d => d.id === id ? { ...d, status: "rejected", rejection_reason: reason, response_history: history } : d));
     setReviewRequest(null);
     try {
-      await base44.entities.DetailRequest.update(id, { status: "rejected", rejection_reason: reason, response_history: history });
-      await base44.functions.invoke('notifyBuyerResponse', { buyerEmail: req?.buyer_email, listingTitle: req?.listing_title, content: reason, type: "rejection" });
+      await api.entities.DetailRequest.update(id, { status: "rejected", rejection_reason: reason, response_history: history });
+      await apiFunction('notifyBuyerResponse', { buyerEmail: req?.buyer_email, listingTitle: req?.listing_title, content: reason, type: "rejection" });
       toast.success("Request rejected and buyer notified");
     } catch {
       toast.error("Failed to reject. Please try again.");
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
     // Optimistic update immediately
     setListings(prev => prev.map(l => l.id === id ? { ...l, is_verified } : l));
     toast.success(is_verified ? "Listing marked as Verified ✅" : "Verification removed");
-    base44.entities.BusinessListing.update(id, { is_verified }).catch(() => {
+    api.entities.BusinessListing.update(id, { is_verified }).catch(() => {
       setListings(prev => prev.map(l => l.id === id ? { ...l, is_verified: current } : l));
       toast.error("Action failed. Please try again.");
     });
@@ -166,7 +166,7 @@ export default function AdminDashboard() {
     // Optimistic update immediately
     setUsers(prev => prev.map(u => u.id === id ? { ...u, verification_status } : u));
     toast.success(`User ${verification_status}`);
-    base44.entities.User.update(id, { verification_status }).catch(() => {
+    api.entities.User.update(id, { verification_status }).catch(() => {
       setUsers(prev => prev.map(u => u.id === id ? { ...u, verification_status: prev_status } : u));
       toast.error("Action failed. Please try again.");
     });
@@ -443,13 +443,13 @@ export default function AdminDashboard() {
                       <div className="flex flex-col gap-1.5 shrink-0">
                         {s.status === "open" && (
                           <Button size="sm" className="text-xs" onClick={() => {
-                            base44.entities.SupportRequest.update(s.id, { status: "in_progress" });
+                            api.entities.SupportRequest.update(s.id, { status: "in_progress" });
                             setSupportRequests(prev => prev.map(r => r.id === s.id ? { ...r, status: "in_progress" } : r));
                           }}>In Progress</Button>
                         )}
                         {s.status !== "resolved" && (
                           <Button size="sm" variant="outline" className="text-xs" onClick={() => {
-                            base44.entities.SupportRequest.update(s.id, { status: "resolved" });
+                            api.entities.SupportRequest.update(s.id, { status: "resolved" });
                             setSupportRequests(prev => prev.map(r => r.id === s.id ? { ...r, status: "resolved" } : r));
                           }}>Resolve</Button>
                         )}

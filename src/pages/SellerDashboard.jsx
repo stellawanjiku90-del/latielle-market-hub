@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { getSession, redirectToLogin } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,9 +40,9 @@ export default function SellerDashboard() {
     if (!resolvedUser) return;
     const identifier = resolvedUser.phone || resolvedUser.userId;
     const [l, r, c] = await Promise.all([
-      base44.entities.BusinessListing.filter({ created_by: identifier }, "-created_date", 50),
-      base44.entities.DetailRequest.filter({ seller_email: identifier }, "-created_date", 50),
-      base44.entities.Conversation.filter({ seller_email: identifier, type: "buyer_seller" }, "-last_message_at", 50),
+      api.entities.BusinessListing.filter({ created_by: identifier }, "-created_date", 50),
+      api.entities.DetailRequest.filter({ seller_email: identifier }, "-created_date", 50),
+      api.entities.Conversation.filter({ seller_email: identifier, type: "buyer_seller" }, "-last_message_at", 50),
     ]);
     setListings(l); setRequests(r); setConversations(c);
   }, [user]);
@@ -61,7 +61,7 @@ export default function SellerDashboard() {
   useEffect(() => {
     if (!user) return;
     const identifier = user.phone || user.userId;
-    const unsubRequests = base44.entities.DetailRequest.subscribe((event) => {
+    const unsubRequests = api.entities.DetailRequest.subscribe((event) => {
       const rec = event.data;
       if (!rec || rec.seller_email !== identifier) return;
       setRequests(prev => {
@@ -72,7 +72,7 @@ export default function SellerDashboard() {
         return prev;
       });
     });
-    const unsubListings = base44.entities.BusinessListing.subscribe((event) => {
+    const unsubListings = api.entities.BusinessListing.subscribe((event) => {
       const rec = event.data;
       if (!rec || rec.created_by !== identifier) return;
       setListings(prev => {
@@ -84,7 +84,7 @@ export default function SellerDashboard() {
       });
     });
     // Keep messages live and in sync (e.g. when a chat is opened on approval)
-    const unsubConv = base44.entities.Conversation.subscribe((event) => {
+    const unsubConv = api.entities.Conversation.subscribe((event) => {
       const rec = event.data;
       if (!rec || rec.type !== "buyer_seller" || rec.seller_email !== identifier) return;
       setConversations(prev => {
@@ -103,7 +103,7 @@ export default function SellerDashboard() {
     if (!user) return;
     const identifier = user.phone || user.userId;
     const interval = setInterval(async () => {
-      const r = await base44.entities.DetailRequest.filter({ seller_email: identifier }, "-created_date", 50);
+      const r = await api.entities.DetailRequest.filter({ seller_email: identifier }, "-created_date", 50);
       setRequests(r);
     }, 4000);
     return () => clearInterval(interval);

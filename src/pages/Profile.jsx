@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { useAuth } from "@/lib/useAuth";
 import { getSession, redirectToLogin } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ export default function Profile() {
     const init = async () => {
       const session = getSession();
       if (!session) { redirectToLogin("/profile"); return; }
-      const list = await base44.entities.PhoneUser.filter({ id: session.userId });
+      const list = await api.entities.PhoneUser.filter({ id: session.userId });
       const u = list?.[0];
       if (u) {
         setRecord(u);
@@ -48,7 +48,7 @@ export default function Profile() {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await api.integrations.Core.UploadFile({ file });
       setForm(prev => ({ ...prev, profile_picture: file_url }));
       toast.success("Photo uploaded");
     } catch {
@@ -62,7 +62,7 @@ export default function Profile() {
     if (!form.full_name.trim()) { toast.error("Please enter your name."); return; }
     setSaving(true);
     try {
-      await base44.entities.PhoneUser.update(record.id, {
+      await api.entities.PhoneUser.update(record.id, {
         full_name: form.full_name.trim(),
         gender: form.gender,
         county: form.county,

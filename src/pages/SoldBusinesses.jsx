@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, MapPin, Clock, TrendingUp } from "lucide-react";
@@ -28,12 +28,12 @@ export default function SoldBusinesses() {
 
   useEffect(() => {
     const init = async () => {
-      let soldListings = await base44.entities.BusinessListing.filter({ status: "sold" }, "-sold_at", 100);
+      let soldListings = await api.entities.BusinessListing.filter({ status: "sold" }, "-sold_at", 100);
 
       // Auto-cleanup: delete listings sold more than SOLD_EXPIRY_DAYS ago
       const expired = soldListings.filter(l => daysSince(l.sold_at) > SOLD_EXPIRY_DAYS);
       for (const l of expired) {
-        await base44.entities.BusinessListing.delete(l.id);
+        await api.entities.BusinessListing.delete(l.id);
       }
 
       // Keep latest records only if exceeds MAX
@@ -41,7 +41,7 @@ export default function SoldBusinesses() {
       if (soldListings.length > MAX_SOLD_RECORDS) {
         const toDelete = soldListings.slice(MAX_SOLD_RECORDS);
         for (const l of toDelete) {
-          await base44.entities.BusinessListing.delete(l.id);
+          await api.entities.BusinessListing.delete(l.id);
         }
         soldListings = soldListings.slice(0, MAX_SOLD_RECORDS);
       }

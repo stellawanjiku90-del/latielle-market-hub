@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api, apiFunction } from "@/api/apiClient";
 import { useAuth } from "@/lib/useAuth";
 import { getSession, consumeReturnUrl } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -42,8 +42,9 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const res = await base44.functions.invoke("loginWithPin", { phone: phone.trim(), pin: pinCode });
+      const res = await apiFunction("loginWithPin", { phone: phone.trim(), pin: pinCode });
       const data = res.data;
+      if (data?.token) localStorage.setItem("auth_token", data.token);
       if (data?.error) throw new Error(data.error);
       if (!data?.success) throw new Error("Login failed. Please try again.");
       finalizeLogin(data.user);
@@ -60,7 +61,7 @@ export default function Login() {
     if (!phone || phone.trim().length < 10) { setError("Please enter a valid phone number."); return; }
     setLoading(true);
     try {
-      const res = await base44.functions.invoke("sendOTP", { phone: phone.trim() });
+      const res = await apiFunction("sendOTP", { phone: phone.trim() });
       if (res.data?.error) throw new Error(res.data.error);
       setStep("otp");
       setOtpCode("");
@@ -75,12 +76,13 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const res = await base44.functions.invoke("verifyOTP", {
+      const res = await apiFunction("verifyOTP", {
         phone: phone.trim(),
         code: otpCode,
         role: selectedRole,
       });
       const data = res.data;
+      if (data?.token) localStorage.setItem("auth_token", data.token);
       if (data?.error) throw new Error(data.error);
       if (!data?.success) throw new Error("Verification failed. Please try again.");
 
@@ -110,7 +112,7 @@ export default function Login() {
     setLoading(true);
     try {
       const fullName = `${firstName.trim()} ${surname.trim()}`;
-      await base44.entities.PhoneUser.update(verifiedUser.id, { full_name: fullName });
+      await api.entities.PhoneUser.update(verifiedUser.id, { full_name: fullName });
       const updated = { ...verifiedUser, full_name: fullName };
       setVerifiedUser(updated);
       // After profile, prompt to set a PIN if not set yet
@@ -133,7 +135,7 @@ export default function Login() {
     if (pinCode !== pinConfirm) { setError("PINs do not match."); return; }
     setLoading(true);
     try {
-      const res = await base44.functions.invoke("setPin", {
+      const res = await apiFunction("setPin", {
         userId: verifiedUser.id,
         phone: phone.trim(),
         pin: pinCode,

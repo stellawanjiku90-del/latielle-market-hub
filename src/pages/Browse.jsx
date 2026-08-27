@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -111,7 +111,7 @@ export default function Browse() {
     const filter = { status: "approved" };
     if (category !== "All") filter.category = category;
     if (county !== "All") filter.county = county;
-    base44.entities.BusinessListing.filter(filter, "-created_date", 50)
+    api.entities.BusinessListing.filter(filter, "-created_date", 50)
       .then((data) => {
         let filtered = data;
         const range = PRICE_RANGES[priceRange];

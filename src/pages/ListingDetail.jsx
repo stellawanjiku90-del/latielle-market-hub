@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api, apiFunction } from "@/api/apiClient";
 import { getSession, redirectToLogin } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +64,7 @@ export default function ListingDetail() {
   const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
-    base44.entities.BusinessListing.get(listingId).then(async (data) => {
+    api.entities.BusinessListing.get(listingId).then(async (data) => {
       setListing(data);
       const newCount = await trackListingView(listingId, data?.views_count);
       if (newCount != null) setListing(prev => prev ? { ...prev, views_count: newCount } : prev);
@@ -82,7 +82,7 @@ export default function ListingDetail() {
     if (!user) { redirectToLoginWithReturn(); return; }
     if (!reportReason || !reportDetails.trim()) { toast.error("Please select a reason and provide details."); return; }
     setReporting(true);
-    await base44.entities.Report.create({
+    await api.entities.Report.create({
       reporter_email: user.phone || user.userId,
       listing_id: listingId,
       reported_user_email: listing.created_by,
@@ -107,7 +107,7 @@ export default function ListingDetail() {
     // Payments temporarily disabled — submit directly for admin verification (free).
     let result = null;
     try {
-      const res = await base44.functions.invoke('submitDetailRequest', {
+      const res = await apiFunction('submitDetailRequest', {
         listingId,
         buyerEmail: user.phone || user.userId,
         sellerEmail: listing.created_by,
