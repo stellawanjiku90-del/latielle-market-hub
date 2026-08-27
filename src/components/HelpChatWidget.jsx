@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { api, apiFunction } from "@/api/apiClient";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, X, Send, Loader2, Bot, User, PhoneCall } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,8 +31,8 @@ export default function HelpChatWidget() {
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    base44.auth.isAuthenticated().then(async (authed) => {
-      if (authed) setCurrentUser(await base44.auth.me());
+    api.auth.isAuthenticated().then(async (authed) => {
+      if (authed) setCurrentUser(await api.auth.me());
     });
   }, []);
 
@@ -63,7 +63,7 @@ export default function HelpChatWidget() {
 
     const conversationHistory = newMessages.map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
 
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await api.integrations.Core.InvokeLLM({
       prompt: `${SYSTEM_CONTEXT}\n\nConversation so far:\n${conversationHistory}\n\nRespond helpfully and concisely as the support assistant.`,
     });
 
@@ -71,7 +71,7 @@ export default function HelpChatWidget() {
 
     // Save first user message as an AI chat support request
     if (newMessages.filter(m => m.role === "user").length === 1 && currentUser?.email) {
-      base44.asServiceRole.entities.SupportRequest.create({
+      api.asServiceRole.entities.SupportRequest.create({
         user_email: currentUser.email,
         user_name: currentUser.full_name || currentUser.email,
         message: text,
@@ -85,7 +85,7 @@ export default function HelpChatWidget() {
 
   const requestHumanChat = async () => {
     if (humanRequested) return;
-    if (!currentUser) { base44.auth.redirectToLogin(); return; }
+    if (!currentUser) { api.auth.redirectToLogin(); return; }
     setRequestingHuman(true);
 
     // Get the last user message as context
@@ -97,7 +97,7 @@ export default function HelpChatWidget() {
         .filter(m => m.role === "user")
         .map(m => m.content)
         .join(" | ");
-      await base44.asServiceRole.entities.SupportRequest.create({
+      await api.asServiceRole.entities.SupportRequest.create({
         user_email: currentUser.email,
         user_name: currentUser.full_name || currentUser.email,
         message: lastUserMsg?.content || "User requested direct chat",
@@ -107,7 +107,7 @@ export default function HelpChatWidget() {
       });
 
       // Create a support conversation so admin can reply directly
-      const conv = await base44.entities.Conversation.create({
+      const conv = await api.entities.Conversation.create({
         type: "support",
         buyer_email: currentUser.email,
         listing_title: "Support Chat Request",
@@ -117,7 +117,7 @@ export default function HelpChatWidget() {
       });
 
       // Send initial message into the conversation
-      await base44.entities.ChatMessage.create({
+      await api.entities.ChatMessage.create({
         conversation_id: conv.id,
         sender_email: currentUser.email,
         sender_name: currentUser.full_name || currentUser.email,
@@ -127,7 +127,7 @@ export default function HelpChatWidget() {
       });
 
       // Notify admin via email
-      await base44.functions.invoke("notifyAdminSupportRequest", {
+      await apiFunction("notifyAdminSupportRequest", {
         user_name: currentUser.full_name || "",
         user_email: currentUser.email,
         message: lastUserMsg?.content || "",

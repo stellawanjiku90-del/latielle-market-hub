@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { Upload, X, Loader2, FileIcon, Video, ZoomIn } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -49,7 +49,7 @@ export default function FileUploader({ label, accept, multiple = false, value = 
         fileToUpload = await enhanceImage(file);
       }
       setStatus("Uploading...");
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: fileToUpload });
+      const { file_url } = await api.integrations.Core.UploadFile({ file: fileToUpload });
       uploaded.push(file_url);
     }
     onChange(multiple ? [...value, ...uploaded] : [uploaded[0]]);

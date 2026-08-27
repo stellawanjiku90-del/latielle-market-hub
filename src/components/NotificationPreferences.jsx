@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,7 @@ export default function NotificationPreferences({ user }) {
 
   useEffect(() => {
     if (!user?.email) return;
-    base44.entities.BuyerPreference.filter({ buyer_email: user.email }, "-created_date", 20)
+    api.entities.BuyerPreference.filter({ buyer_email: user.email }, "-created_date", 20)
       .then(data => { setPrefs(data); setLoading(false); });
   }, [user]);
 
@@ -34,7 +34,7 @@ export default function NotificationPreferences({ user }) {
   const handleCreate = async () => {
     if (form.counties.length === 0) { toast.error("Select at least one county."); return; }
     if (!form.max_budget) { toast.error("Enter a maximum budget."); return; }
-    await base44.entities.BuyerPreference.create({
+    await api.entities.BuyerPreference.create({
       buyer_email: user.email,
       buyer_name: user.full_name,
       counties: form.counties,
@@ -43,7 +43,7 @@ export default function NotificationPreferences({ user }) {
       max_budget: Number(form.max_budget),
       is_active: true,
     });
-    const updated = await base44.entities.BuyerPreference.filter({ buyer_email: user.email }, "-created_date", 20);
+    const updated = await api.entities.BuyerPreference.filter({ buyer_email: user.email }, "-created_date", 20);
     setPrefs(updated);
     setForm({ counties: [], categories: [], min_budget: "", max_budget: "" });
     setCreating(false);
@@ -51,12 +51,12 @@ export default function NotificationPreferences({ user }) {
   };
 
   const toggleActive = async (pref) => {
-    await base44.entities.BuyerPreference.update(pref.id, { is_active: !pref.is_active });
+    await api.entities.BuyerPreference.update(pref.id, { is_active: !pref.is_active });
     setPrefs(prev => prev.map(p => p.id === pref.id ? { ...p, is_active: !p.is_active } : p));
   };
 
   const handleDelete = async (id) => {
-    await base44.entities.BuyerPreference.delete(id);
+    await api.entities.BuyerPreference.delete(id);
     setPrefs(prev => prev.filter(p => p.id !== id));
     toast.success("Alert deleted.");
   };

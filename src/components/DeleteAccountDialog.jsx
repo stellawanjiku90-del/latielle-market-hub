@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ export default function DeleteAccountDialog() {
     }
     setLoading(true);
     // Send data deletion request email to admin
-    await base44.integrations.Core.SendEmail({
+    await api.integrations.Core.SendEmail({
       to: "realityofafrica2023@gmail.com",
       subject: "Account Deletion Request",
       body: `A user has requested deletion of their account.\n\nPlease process this request and permanently delete all associated data from the platform.\n\nThis request was submitted via the app at ${new Date().toISOString()}.`,
@@ -26,7 +26,7 @@ export default function DeleteAccountDialog() {
     toast.success("Deletion request submitted. Your account will be removed within 30 days.");
     setLoading(false);
     setOpen(false);
-    base44.auth.logout();
+    api.auth.logout();
   };
 
   return (

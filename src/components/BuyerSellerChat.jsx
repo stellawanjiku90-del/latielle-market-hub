@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { api, apiFunction } from "@/api/apiClient";
 import { Button } from "@/components/ui/button";
 import { Send, Loader2, MessageSquare, X, Paperclip, Trash2, AlertTriangle, Ban, ShieldCheck, FileIcon, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,12 +34,12 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
   }, [messages]);
 
   const loadConversation = async () => {
-    const conv = await base44.entities.Conversation.get(conversationId).catch(() => null);
+    const conv = await api.entities.Conversation.get(conversationId).catch(() => null);
     if (conv) setConversation(conv);
   };
 
   const loadMessages = async () => {
-    const msgs = await base44.entities.ChatMessage.filter({ conversation_id: conversationId }, "created_date", 100);
+    const msgs = await api.entities.ChatMessage.filter({ conversation_id: conversationId }, "created_date", 100);
     setMessages(prev => {
       const optimistic = prev.filter(m => m._optimistic);
       const optimisticNotYetConfirmed = optimistic.filter(
@@ -49,7 +49,7 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
     });
     setLoading(false);
     msgs.filter(m => !m.is_read && m.sender_email !== currentUserEmail).forEach(m => {
-      base44.entities.ChatMessage.update(m.id, { is_read: true }).catch(() => {});
+      api.entities.ChatMessage.update(m.id, { is_read: true }).catch(() => {});
     });
   };
 
@@ -59,7 +59,7 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
     try {
       const urls = [];
       for (const file of Array.from(files)) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await api.integrations.Core.UploadFile({ file });
         urls.push(file_url);
       }
       setAttachments(prev => [...prev, ...urls]);
@@ -94,7 +94,7 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
-      await base44.entities.ChatMessage.create({
+      await api.entities.ChatMessage.create({
         conversation_id: conversationId,
         sender_email: currentUserEmail,
         sender_name: currentUserName || currentUserEmail,
@@ -103,13 +103,13 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
         attachments: sentAttachments,
         is_read: false,
       });
-      await base44.entities.Conversation.update(conversationId, {
+      await api.entities.Conversation.update(conversationId, {
         last_message: (text || `📎 ${sentAttachments.length} attachment(s)`).slice(0, 80),
         last_message_at: new Date().toISOString(),
       });
       // Notify the other party (buyer/seller chats only)
       if (!isAdmin && otherPartyEmail) {
-        base44.functions.invoke('createNotification', {
+        apiFunction('createNotification', {
           recipient: otherPartyEmail,
           type: "new_message",
           title: `New message — ${listingTitle || "Business Chat"}`,
@@ -135,13 +135,13 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
   // ---- Admin moderation ----
   const deleteMessage = async (msg) => {
     setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, is_deleted: true } : m));
-    await base44.entities.ChatMessage.update(msg.id, { is_deleted: true }).catch(() => toast.error("Failed to remove message."));
+    await api.entities.ChatMessage.update(msg.id, { is_deleted: true }).catch(() => toast.error("Failed to remove message."));
     toast.success("Message removed");
   };
 
   const warnUser = async (msg) => {
     if (!msg.sender_email) return;
-    await base44.functions.invoke('createNotification', {
+    await apiFunction('createNotification', {
       recipient: msg.sender_email,
       type: "warning",
       title: "⚠️ Warning from Admin",
@@ -154,7 +154,7 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
   const toggleBlock = async () => {
     const newStatus = isBlocked ? "active" : "closed";
     setConversation(prev => ({ ...prev, status: newStatus }));
-    await base44.entities.Conversation.update(conversationId, { status: newStatus }).catch(() => toast.error("Failed to update conversation."));
+    await api.entities.Conversation.update(conversationId, { status: newStatus }).catch(() => toast.error("Failed to update conversation."));
     toast.success(newStatus === "closed" ? "Conversation blocked" : "Conversation re-enabled");
   };
 

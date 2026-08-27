@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { User, MapPin, Pencil } from "lucide-react";
@@ -10,7 +10,7 @@ export default function DashboardProfileHeader({ session, title }) {
 
   useEffect(() => {
     if (!session?.userId) return;
-    base44.entities.PhoneUser.filter({ id: session.userId }).then(list => {
+    api.entities.PhoneUser.filter({ id: session.userId }).then(list => {
       if (list?.[0]) setProfile(list[0]);
     });
   }, [session?.userId]);
