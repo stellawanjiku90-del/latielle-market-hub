@@ -1,25 +1,31 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
-
-function getToken() {
-  return localStorage.getItem('latielle_token');
-}
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 async function request(path, options = {}) {
-  const token = getToken();
+  const token = localStorage.getItem("auth_token");
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "Content-Type": "application/json",
+      ...(token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {}),
       ...(options.headers || {}),
     },
+    ...options,
   });
 
-  const data = await response.json().catch(() => null);
+  const contentType = response.headers.get("content-type") || "";
+
+  const data = contentType.includes("application/json")
+    ? await response.json()
+    : await response.text();
 
   if (!response.ok) {
-    throw new Error(data?.error || `Request failed (${response.status})`);
+    throw new Error(
+      data?.error || data?.message || "Something went wrong"
+    );
   }
 
   return data;
@@ -27,127 +33,107 @@ async function request(path, options = {}) {
 
 export const base44 = {
   auth: {
-    async login(credentials) {
-      const result = await request('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(credentials),
+    async login({ email, password }) {
+      const data = await request("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
 
-      if (result.token) {
-        localStorage.setItem('latielle_token', result.token);
+      if (data.token) {
+        localStorage.setItem("auth_token", data.token);
       }
 
-      return result;
+      if (data.user) {
+        localStorage.setItem(
+          "auth_user",
+          JSON.stringify(data.user)
+        );
+      }
+
+      return data;
     },
 
-    async register(userData) {
-      const result = await request('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(userData),
+    async register({ name, email, password, role = "buyer" }) {
+      const data = await request("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+        }),
       });
 
-      if (result.token) {
-        localStorage.setItem('latielle_token', result.token);
+      if (data.token) {
+        localStorage.setItem("auth_token", data.token);
       }
 
-      return result;
+      if (data.user) {
+        localStorage.setItem(
+          "auth_user",
+          JSON.stringify(data.user)
+        );
+      }
+
+      return data;
     },
 
     async me() {
-      return request('/me');
+      return request("/api/me");
+    },
+
+    async isAuthenticated() {
+      return Boolean(localStorage.getItem("auth_token"));
     },
 
     logout() {
-      localStorage.removeItem('latielle_token');
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("auth_user");
     },
   },
 
-  listings: {
-    list() {
-      return request('/listings');
-    },
+  entities: {
+    BusinessListing: {
+      async list() {
+        return request("/api/listings");
+      },
 
-    get(id) {
-      return request(`/listings/${id}`);
-    },
+      async get(id) {
+        return request(`/api/listings/${id}`);
+      },
 
-    create(data) {
-      return request('/listings', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-    },
+      async create(data) {
+        return request("/api/listings", {
+          method: "POST",
+          body: JSON.stringify(data),
+        });
+      },
 
-    update(id, data) {
-      return request(`/listings/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      });
-    },
+      async update(id, data) {
+        return request(`/api/listings/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(data),
+        });
+      },
 
-    delete(id) {
-      return request(`/listings/${id}`, {
-        method: 'DELETE',
-      });
-    },
-  },
-
-  requests: {
-    create(data) {
-      return request('/requests', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-    },
-
-    mine() {
-      return request('/requests/mine');
+      async delete(id) {
+        return request(`/api/listings/${id}`, {
+          method: "DELETE",
+        });
+      },
     },
   },
 
-  dashboard: {
-    seller() {
-      return request('/dashboard/seller');
+  functions: {
+    async invoke(name, payload = {}) {
+      throw new Error(
+        `Base44 function "${name}" is no longer available. Replace this call with an Express API endpoint.`
+      );
     },
-
-    admin() {
-      return request('/dashboard/admin');
-    },
-  },
-
-  health() {
-    return request('/health');
   },
 };
 
-
-
-function listingFromLegacy(data) {
-  return data;
-}
-
-const BusinessListing = {
-  async list() { return request('/listings'); },
-  async filter(filters = {}) {
-    const rows = await request('/listings');
-    return rows.filter(row => Object.entries(filters).every(([k,v]) => row[k] === v));
-  },
-  async get(id) { return request(`/listings/${id}`); },
-  async create(data) { return request('/listings', {method:'POST', body:JSON.stringify(listingFromLegacy(data))}); },
-  async update(id,data) { return request(`/listings/${id}`, {method:'PATCH', body:JSON.stringify(data)}); },
-  async delete(id) { return request(`/listings/${id}`, {method:'DELETE'}); }
-};
-
-const unsupportedEntity = {
-  async list(){ return []; }, async filter(){ return []; }, async create(data){ return data; },
-  async update(_id,data){ return data; }, async delete(){ return true; }
-};
-
-base44.auth.isAuthenticated = async () => !!getToken();
-base44.auth.redirectToLogin = () => { window.location.assign('/login'); };
-base44.entities = new Proxy({ BusinessListing }, { get(target, prop) { return target[prop] || unsupportedEntity; } });
-base44.asServiceRole = { entities: base44.entities };
-base44.integrations = { Core: { async InvokeLLM() { return "Support chat is currently unavailable. Please email realityofafrica2023@gmail.com for assistance."; } } };
-base44.functions = new Proxy({}, { get: () => ({ async invoke(){ return {}; } }) });
-
-export { request };
+export default base44;
