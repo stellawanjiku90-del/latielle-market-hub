@@ -1,6 +1,6 @@
 /**
  * Custom hook for phone-based authentication.
- * Reads/writes from localStorage. Used throughout the app instead of base44.auth.
+ * Reads/writes from localStorage. Used throughout the app instead of api.auth.
  */
 import { useState, useEffect } from 'react';
 import { getPhoneSession, savePhoneSession, clearPhoneSession } from './phoneAuth';
