@@ -20,3 +20,38 @@ CREATE TABLE IF NOT EXISTS payment_events (
 );
 CREATE INDEX IF NOT EXISTS listings_seller_idx ON listings(seller_id);
 CREATE INDEX IF NOT EXISTS listings_status_idx ON listings(status);
+
+-- Latielle phone authentication and generic application records
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS favorites JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS county TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS national_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS selfie_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS id_document_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'unverified';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS business_docs JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS has_pin BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subcounty TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_locked_until TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS otp_codes (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(), phone TEXT NOT NULL, code TEXT NOT NULL,
+ expires_at TIMESTAMPTZ NOT NULL, consumed BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS otp_phone_idx ON otp_codes(phone);
+
+CREATE TABLE IF NOT EXISTS entity_records (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(), entity_name TEXT NOT NULL, data JSONB NOT NULL DEFAULT '{}'::jsonb,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS entity_records_name_idx ON entity_records(entity_name);
+CREATE INDEX IF NOT EXISTS entity_records_data_idx ON entity_records USING GIN(data);
+
+ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_status_check;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
