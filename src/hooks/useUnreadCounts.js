@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 
 // Returns a map of { [conversationId]: unreadCount } for the current user,
 // counting messages that were NOT sent by me and are not yet read.
@@ -14,7 +14,7 @@ export default function useUnreadCounts(conversations, currentUserEmail) {
     }
     const entries = await Promise.all(
       conversations.map(async (conv) => {
-        const msgs = await base44.entities.ChatMessage.filter(
+        const msgs = await api.entities.ChatMessage.filter(
           { conversation_id: conv.id, is_read: false },
           "-created_date",
           100
@@ -33,7 +33,7 @@ export default function useUnreadCounts(conversations, currentUserEmail) {
   useEffect(() => {
     if (!currentUserEmail) return;
     const convIds = new Set((conversations || []).map((c) => c.id));
-    const unsub = base44.entities.ChatMessage.subscribe((event) => {
+    const unsub = api.entities.ChatMessage.subscribe((event) => {
       const rec = event.data;
       if (!rec || !convIds.has(rec.conversation_id)) return;
       recompute();

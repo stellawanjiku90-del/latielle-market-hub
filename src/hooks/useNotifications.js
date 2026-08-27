@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { api } from "@/api/apiClient";
 import { toast } from "sonner";
 
 // Loads notifications for the current recipient, keeps them live via subscription,
@@ -11,7 +11,7 @@ export default function useNotifications(recipient) {
 
   const load = useCallback(async () => {
     if (!recipient) return;
-    const list = await base44.entities.Notification.filter({ recipient }, "-created_date", 50);
+    const list = await api.entities.Notification.filter({ recipient }, "-created_date", 50);
     list.forEach((n) => seenIds.current.add(n.id));
     initialized.current = true;
     setNotifications(list);
@@ -23,7 +23,7 @@ export default function useNotifications(recipient) {
 
   useEffect(() => {
     if (!recipient) return;
-    const unsub = base44.entities.Notification.subscribe((event) => {
+    const unsub = api.entities.Notification.subscribe((event) => {
       const rec = event.data;
       if (!rec || rec.recipient !== recipient) return;
 
@@ -50,7 +50,7 @@ export default function useNotifications(recipient) {
   const markAllRead = useCallback(async () => {
     const unread = notifications.filter((n) => !n.is_read);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    await Promise.all(unread.map((n) => base44.entities.Notification.update(n.id, { is_read: true }).catch(() => {})));
+    await Promise.all(unread.map((n) => api.entities.Notification.update(n.id, { is_read: true }).catch(() => {})));
   }, [notifications]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
