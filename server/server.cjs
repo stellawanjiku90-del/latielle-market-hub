@@ -21,11 +21,21 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is required');
 }
 
+const allowedOrigins = [
+  ...(process.env.CLIENT_URL || '').split(',').map((value) => value.trim()).filter(Boolean),
+  process.env.RENDER_EXTERNAL_URL,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL
-      ? process.env.CLIENT_URL.split(',')
-      : true,
+    origin(origin, callback) {
+      // Same-origin requests have no Origin header and should always be allowed.
+      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      console.warn('CORS blocked origin:', origin);
+      return callback(new Error('CORS origin not allowed'));
+    },
   })
 );
 
