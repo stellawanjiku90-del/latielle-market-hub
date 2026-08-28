@@ -40,6 +40,7 @@ export async function apiFunction(name, payload = {}) {
 }
 
 export const api = {
+  request,
   auth: {
     async login({ email, password }) {
       const data = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
