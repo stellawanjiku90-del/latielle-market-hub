@@ -11,10 +11,10 @@ import { Link, Navigate } from "react-router-dom";
 
 export default function Login() {
   const { login } = useAuth();
-  const [step, setStep] = useState("role"); // role | phone | pin | otp | setpin | profile
+  const [step, setStep] = useState("role"); // role | phone | pin | signup-pin | payment | profile
   const [selectedRole, setSelectedRole] = useState(null);
   const [phone, setPhone] = useState("+254");
-  const [otpCode, setOtpCode] = useState("");
+  const [checkoutRequestId, setCheckoutRequestId] = useState("");
   const [pinCode, setPinCode] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -55,54 +55,46 @@ export default function Login() {
     }
   };
 
-  const handleSendOTP = async (e) => {
-    if (e?.preventDefault) e.preventDefault();
+  const handleStartSignup = () => {
     setError("");
-    if (!phone || phone.trim().length < 10) { setError("Please enter a valid phone number."); return; }
-    setLoading(true);
-    try {
-      const res = await apiFunction("sendOTP", { phone: phone.trim() });
-      if (res.data?.error) throw new Error(res.data.error);
-      setStep("otp");
-      setOtpCode("");
-    } catch (err) {
-      setError(err.message || "Failed to send code. Check the number and try again.");
-    } finally {
-      setLoading(false);
-    }
+    if (!phone || phone.trim().length < 10) { setError("Please enter a valid Kenyan phone number."); return; }
+    setPinCode("");
+    setPinConfirm("");
+    setStep("signup-pin");
   };
 
-  const handleVerifyOTP = async () => {
+  const handleRegistrationPayment = async () => {
     setError("");
+    if (!/^\d{4}$/.test(pinCode)) { setError("PIN must be exactly 4 digits."); return; }
+    if (pinCode !== pinConfirm) { setError("PINs do not match."); return; }
     setLoading(true);
     try {
-      const res = await apiFunction("verifyOTP", {
-        phone: phone.trim(),
-        code: otpCode,
-        role: selectedRole,
-      });
-      const data = res.data;
-      if (data?.token) localStorage.setItem("auth_token", data.token);
-      if (data?.error) throw new Error(data.error);
-      if (!data?.success) throw new Error("Verification failed. Please try again.");
-
-      const user = data.user;
-      setVerifiedUser(user);
-
-      // No name yet → profile setup first; then set PIN.
-      if (!user.full_name) {
-        setStep("profile");
-      } else if (!user.has_pin) {
-        setStep("setpin");
-        setPinCode(""); setPinConfirm("");
-      } else {
-        finalizeLogin(user);
-      }
+      const data = await api.request("/api/auth/register-payment", { method: "POST", body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode }) });
+      setCheckoutRequestId(data.checkoutRequestId);
+      setStep("payment");
+      pollRegistration(data.checkoutRequestId);
     } catch (err) {
-      setError(err.message || "Verification failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+      setError(err.message || "Unable to start payment.");
+    } finally { setLoading(false); }
+  };
+
+  const pollRegistration = async (checkoutId) => {
+    let attempts = 0;
+    const poll = async () => {
+      if (!checkoutId || attempts++ >= 40) return;
+      try {
+        const result = await api.request(`/api/auth/registration-status/${encodeURIComponent(checkoutId)}`);
+        if (result.status === "paid" && result.token && result.user) {
+          localStorage.setItem("auth_token", result.token);
+          setVerifiedUser(result.user);
+          finalizeLogin(result.user, "/profile");
+          return;
+        }
+        if (result.status === "failed") { setError("M-Pesa payment was not completed. Please try again."); return; }
+      } catch (err) { /* keep polling while payment is pending */ }
+      setTimeout(poll, 3000);
+    };
+    poll();
   };
 
   const handleSaveProfile = async () => {
@@ -274,8 +266,8 @@ export default function Login() {
                 <Button onClick={goToPin} className="w-full h-12 font-body font-medium gap-2" disabled={!phone.trim()}>
                   <KeyRound className="h-4 w-4" /> Sign in with PIN
                 </Button>
-                <Button onClick={handleSendOTP} variant="outline" className="w-full h-12 font-body font-medium" disabled={loading || !phone.trim()}>
-                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending code...</> : "New here? Send me a code"}
+                <Button onClick={handleStartSignup} variant="outline" className="w-full h-12 font-body font-medium" disabled={loading || !phone.trim()}>
+                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting verification...</> : "New here? Verify with KSh 100"}
                 </Button>
               </div>
 
@@ -317,10 +309,7 @@ export default function Login() {
                 {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Signing in...</> : "Sign In"}
               </Button>
 
-              <p className="text-center text-sm text-muted-foreground mt-4 font-body">
-                Forgot PIN?{" "}
-                <button onClick={handleSendOTP} className="text-primary font-medium hover:underline">Sign in with a code</button>
-              </p>
+              <p className="text-center text-sm text-muted-foreground mt-4 font-body">Forgot your PIN? Contact Latielle Market Hub support for account recovery.</p>
               <div className="mt-2 text-center">
                 <button onClick={() => { setStep("phone"); setPinCode(""); setError(""); }} className="text-sm text-muted-foreground hover:text-foreground font-body">
                   ← Change number
@@ -329,48 +318,40 @@ export default function Login() {
             </>
           )}
 
-          {/* STEP: OTP Verification */}
-          {step === "otp" && (
+          {/* STEP: Signup PIN */}
+          {step === "signup-pin" && (
+            <>
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mx-auto mb-4"><KeyRound className="h-6 w-6 text-primary" /></div>
+              <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Create Your PIN</h1>
+              <p className="text-sm text-muted-foreground text-center font-body mb-6">Set a 4-digit PIN, then pay a one-time <span className="font-medium text-foreground">KSh 100 verification fee</span>.</p>
+              {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>}
+              <div className="space-y-5">
+                <div><Label className="font-body mb-2 block">4-digit PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
+                <div><Label className="font-body mb-2 block">Confirm PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinConfirm} onChange={setPinConfirm}><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
+                <Button className="w-full h-12 font-body font-medium" onClick={handleRegistrationPayment} disabled={loading || pinCode.length<4 || pinConfirm.length<4}>{loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/>Starting M-Pesa...</> : "Pay KSh 100 & Verify"}</Button>
+              </div>
+              <button onClick={() => { setStep("phone"); setError(""); }} className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground font-body">← Back</button>
+            </>
+          )}
+
+          {/* STEP: M-Pesa Registration Verification */}
+          {step === "payment" && (
             <>
               <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mx-auto mb-4">
                 <ShieldCheck className="h-6 w-6 text-primary" />
               </div>
-              <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Enter Code</h1>
-              <p className="text-sm text-muted-foreground text-center font-body mb-6">
-                We sent a 6-digit SMS code to<br />
+              <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Verify Your Account</h1>
+              <p className="text-sm text-muted-foreground text-center font-body mb-5">
+                An M-Pesa prompt for <span className="font-medium text-foreground">KSh 100</span> has been sent to<br />
                 <span className="font-medium text-foreground">{phone}</span>
               </p>
-
-              {error && (
-                <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>
-              )}
-
-              <div className="flex justify-center mb-6">
-                <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode} autoFocus autoComplete="one-time-code">
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
+              {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>}
+              <div className="rounded-xl border p-4 bg-primary/5 text-sm font-body space-y-2">
+                <p className="font-semibold">Complete the M-Pesa prompt on your phone.</p>
+                <p className="text-muted-foreground">Enter your M-Pesa PIN when prompted. We will activate your Latielle Market Hub account automatically after Safaricom confirms the KSh 100 payment.</p>
               </div>
-
-              <Button className="w-full h-12 font-body font-medium" onClick={handleVerifyOTP} disabled={loading || otpCode.length < 6}>
-                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Verifying...</> : "Verify & Continue"}
-              </Button>
-
-              <p className="text-center text-sm text-muted-foreground mt-4 font-body">
-                Didn't get a code?{" "}
-                <button onClick={handleSendOTP} className="text-primary font-medium hover:underline">Resend</button>
-              </p>
-              <div className="mt-2 text-center">
-                <button onClick={() => { setStep("phone"); setOtpCode(""); setError(""); }} className="text-sm text-muted-foreground hover:text-foreground font-body">
-                  ← Change number
-                </button>
-              </div>
+              <div className="flex items-center justify-center gap-2 mt-6 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Waiting for payment confirmation...</div>
+              <button onClick={() => { setStep("signup-pin"); setError(""); }} className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground font-body">← Back</button>
             </>
           )}
 
