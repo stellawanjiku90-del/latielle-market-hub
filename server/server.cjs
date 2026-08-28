@@ -640,11 +640,23 @@ function mpesaConfig() {
     consumerSecret: process.env.MPESA_CONSUMER_SECRET,
     callbackUrl: process.env.MPESA_CALLBACK_URL,
     partyB: process.env.MPESA_PARTY_B || process.env.MPESA_SHORTCODE,
+    transactionType: process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',
   };
+}
+
+function validateMpesaStkConfig(cfg) {
+  const allowed = new Set(['CustomerPayBillOnline', 'CustomerBuyGoodsOnline']);
+  if (!allowed.has(cfg.transactionType)) {
+    throw new Error('MPESA_TRANSACTION_TYPE must be CustomerPayBillOnline or CustomerBuyGoodsOnline.');
+  }
+  if (!/^https:\/\//.test(cfg.callbackUrl)) {
+    throw new Error('MPESA_CALLBACK_URL must be a public HTTPS URL.');
+  }
 }
 
 async function mpesaAccessToken() {
   const cfg = mpesaConfig();
+  validateMpesaStkConfig(cfg);
   const credentials = Buffer.from(`${cfg.consumerKey}:${cfg.consumerSecret}`).toString('base64');
   const response = await fetch(`${cfg.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
     headers: { Authorization: `Basic ${credentials}` },
@@ -712,7 +724,7 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
         BusinessShortCode: cfg.shortcode,
         Password: password,
         Timestamp: timestamp,
-        TransactionType: process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',
+        TransactionType: cfg.transactionType,
         Amount: 100,
         PartyA: phone.slice(1),
         PartyB: cfg.partyB,
@@ -733,9 +745,24 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
       });
     }
 
-    await db.query(`UPDATE pending_registrations SET merchant_request_id=$2, checkout_request_id=$3, updated_at=NOW() WHERE phone=$1`, [phone, data.MerchantRequestID || null, data.CheckoutRequestID || null]);
+    if (!data.CheckoutRequestID) {
+      console.error('M-Pesa STK response missing CheckoutRequestID', { response: data });
+      return res.status(502).json({ error: 'M-Pesa accepted the request without a checkout ID. Please check Render logs.' });
+    }
 
-    res.json({ success: true, checkoutRequestId: data.CheckoutRequestID, message: 'M-Pesa payment prompt sent. Approve KSh 100 on your phone.' });
+    console.log('M-Pesa STK accepted', {
+      responseCode: data.ResponseCode,
+      merchantRequestId: data.MerchantRequestID || null,
+      checkoutRequestId: data.CheckoutRequestID,
+      transactionType: cfg.transactionType,
+      partyB: cfg.partyB,
+      environment: (process.env.MPESA_ENV || 'production').toLowerCase(),
+      phoneLast4: phone.slice(-4),
+    });
+
+    await db.query(`UPDATE pending_registrations SET merchant_request_id=$2, checkout_request_id=$3, updated_at=NOW() WHERE phone=$1`, [phone, data.MerchantRequestID || null, data.CheckoutRequestID]);
+
+    res.json({ success: true, checkoutRequestId: data.CheckoutRequestID, message: 'M-Pesa payment request accepted. Check your phone for the prompt.' });
   } catch (e) { next(e); }
 });
 
@@ -750,7 +777,12 @@ app.get('/api/auth/registration-status/:checkoutRequestId', async (req, res, nex
       const u = (await db.query('SELECT * FROM users WHERE phone=$1', [pending.phone])).rows[0];
       if (u) return res.json({ success: true, status: 'paid', user: phoneUser(u), token: token({ id: u.id, email: u.email, role: u.role }) });
     }
-    res.json({ success: true, status: pending.status });
+    res.json({
+      success: true,
+      status: pending.status,
+      resultCode: pending.result_code ?? null,
+      reason: pending.result_description || null,
+    });
   } catch (e) { next(e); }
 });
 
@@ -760,6 +792,12 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
     const stk = req.body?.Body?.stkCallback;
     const checkoutId = stk?.CheckoutRequestID;
     const resultCode = Number(stk?.ResultCode);
+    const resultDescription = String(stk?.ResultDesc || '');
+    console.log('M-Pesa callback received', {
+      checkoutRequestId: checkoutId || null,
+      resultCode: Number.isFinite(resultCode) ? resultCode : null,
+      resultDescription: resultDescription || null,
+    });
     if (checkoutId) {
       const pending = (await db.query('SELECT * FROM pending_registrations WHERE checkout_request_id=$1', [checkoutId])).rows[0];
       if (pending) {
@@ -770,7 +808,7 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
           const receipt = getItem('MpesaReceiptNumber') || null;
           const phone = normalizePhone(getItem('PhoneNumber') ? String(getItem('PhoneNumber')) : pending.phone);
           if (amount !== 100 || phone !== pending.phone) {
-            await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, updated_at=NOW() WHERE id=$1`, [pending.id, 1]);
+            await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, 1, 'Callback validation failed: amount or phone number did not match.']);
           } else {
             const client = await db.pool?.connect?.();
             // db.cjs exposes query only; use a transaction through its pool when available.
@@ -786,12 +824,12 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
                 await client.query('COMMIT');
               } catch (txError) { await client.query('ROLLBACK'); throw txError; } finally { client.release(); }
             } else {
-              await db.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, updated_at=NOW() WHERE id=$1`, [pending.id, receipt]);
+              await db.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, receipt, resultDescription || 'Payment completed successfully']);
               await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO NOTHING`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash]);
             }
           }
         } else {
-          await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, updated_at=NOW() WHERE id=$1`, [pending.id, resultCode]);
+          await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, resultCode, resultDescription || 'M-Pesa did not complete the request.']);
         }
       }
     }
@@ -897,7 +935,7 @@ app.post('/api/functions/:name', async(req,res,next)=>{
     const phone=normalizePhone(p.phone); const amount=Number(p.amount||0);
     if(!isKenyanPhone(phone) || !Number.isFinite(amount) || amount<=0) return res.status(400).json({error:'Valid phone number and amount are required'});
     const {token: accessToken,cfg}=await mpesaAccessToken(); const timestamp=new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14); const password=mpesaPassword(cfg.shortcode,cfg.passkey,timestamp);
-    const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',Amount:Math.round(amount),PartyA:phone.slice(1),PartyB:cfg.shortcode,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:String(p.detailRequestId||p.listingId||'LATIELLE'),TransactionDesc:String(p.listingTitle||'Latielle Market Hub payment').slice(0,13)})});
+    const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:cfg.transactionType,Amount:Math.round(amount),PartyA:phone.slice(1),PartyB:cfg.partyB,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:String(p.detailRequestId||p.listingId||'LATIELLE'),TransactionDesc:String(p.listingTitle||'Latielle Market Hub payment').slice(0,13)})});
     const data=await response.json().catch(()=>({})); if(!response.ok||data.ResponseCode!=='0') return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'M-Pesa payment request failed'}); return res.json({success:true,checkoutRequestId:data.CheckoutRequestID,merchantRequestId:data.MerchantRequestID,message:'M-Pesa payment prompt sent'});
   }
   if(n==='createNotification'||n.startsWith('notify')) return res.json({success:true});
