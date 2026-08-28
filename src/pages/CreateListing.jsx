@@ -185,7 +185,7 @@ export default function CreateListing() {
   if (!user) return null;
 
   return (
-    <div className="pt-20 pb-16 min-h-screen bg-secondary/20">
+    <div className="pt-20 pb-16 min-h-screen bg-slate-50">
       <div className="max-w-2xl mx-auto px-4">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-body mb-6 hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />Back
@@ -381,10 +381,10 @@ export default function CreateListing() {
                   }}
                 />
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-5">
                 <div>
-                  <p className="text-sm font-semibold text-amber-800">Confidential Documents</p>
-                  <p className="text-[11px] text-amber-700 mt-0.5">These documents are kept private and only shared with verified buyers upon request. They help build trust and speed up the sale.</p>
+                  <p className="text-sm font-semibold text-slate-800">Confidential Documents</p>
+                  <p className="text-[11px] text-slate-700 mt-0.5">These documents are kept private and only shared with verified buyers upon request. They help build trust and speed up the sale.</p>
                 </div>
                 <FileUploader
                   label="Business Licence(s)"

@@ -48,16 +48,16 @@ export default function PrivacyPolicy() {
   return (
     <div className="pt-20 pb-16 min-h-screen">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-body mb-6 hover:text-foreground">
+        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground mb-6 hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />Back to Home
         </Link>
-        <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: August 2026</p>
+        <h1 className="text-3xl sm:text-4xl font-bold mb-2">Privacy Policy</h1>
+        <p className="text-sm text-muted-foreground mb-8">Last updated: August 2026</p>
         <div className="space-y-8">
           {SECTIONS.map(section => (
             <div key={section.title}>
-              <h2 className="font-heading text-xl font-semibold text-foreground mb-2">{section.title}</h2>
-              <p className="text-base text-muted-foreground font-body leading-7">{section.content}</p>
+              <h2 className="text-xl font-semibold text-foreground mb-2">{section.title}</h2>
+              <p className="text-base text-muted-foreground leading-7">{section.content}</p>
             </div>
           ))}
         </div>

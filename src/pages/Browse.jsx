@@ -223,7 +223,7 @@ export default function Browse() {
                     <button
                       onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                       disabled={currentPage === 1}
-                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-secondary/60 transition-colors"
+                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-muted transition-colors"
                     >Previous</button>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                       <button
@@ -232,14 +232,14 @@ export default function Browse() {
                         className={`w-10 h-10 rounded-lg text-sm font-body font-medium transition-colors ${
                           page === currentPage
                             ? "bg-primary text-primary-foreground"
-                            : "border border-border hover:bg-secondary/60"
+                            : "border border-border hover:bg-muted"
                         }`}
                       >{page}</button>
                     ))}
                     <button
                       onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                       disabled={currentPage === totalPages}
-                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-secondary/60 transition-colors"
+                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-muted transition-colors"
                     >Next</button>
                   </div>
                 )}
