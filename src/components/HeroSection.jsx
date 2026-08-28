@@ -20,12 +20,8 @@ export default function HeroSection() {
   };
 
   return (
-    <section className="relative min-h-[78vh] flex items-center overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_35%,hsl(var(--accent))_0%,hsl(var(--background))_42%,hsl(var(--background))_100%)]" />
-      <div className="absolute top-20 right-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
-      <div className="absolute bottom-20 left-10 w-96 h-96 bg-accent/30 rounded-full blur-3xl" />
-      
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 w-full">
+    <section className="relative flex items-center bg-background border-b border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 lg:py-24 w-full">
         <div className="max-w-3xl">
           <div className="flex items-center gap-2 mb-6">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
@@ -34,15 +30,12 @@ export default function HeroSection() {
             </span>
           </div>
           
-          <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-semibold text-foreground leading-[1.08]">
-            {"Buy and Sell"} <br />
-            <span className="text-primary">Businesses listed</span>
-            <br />in Kenya
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight max-w-3xl">
+            Buy and sell businesses in Kenya
           </h1>
           
-          <p className="mt-6 text-[1.0625rem] text-muted-foreground max-w-xl leading-relaxed">
-            Find businesses for sale in Kenya and connect with sellers through one marketplace.
-            We verify seller information and keep approved private details behind the platform.
+          <p className="mt-5 text-base sm:text-lg text-muted-foreground max-w-2xl leading-7">
+            Browse businesses for sale, compare listings and contact sellers through the marketplace.
           </p>
 
           <form onSubmit={handleSearch} className="mt-8 flex gap-2 max-w-lg">
@@ -58,13 +51,13 @@ export default function HeroSection() {
             <Button type="submit" className="h-12 px-6 font-body">Search</Button>
           </form>
 
-          <div className="mt-10 flex items-center gap-6 text-sm text-muted-foreground font-body">
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" />Seller checks</div>
             <div className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-primary" />Private details</div>
             <div className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-primary" />M-Pesa payments</div>
           </div>
 
-          <div className="mt-12 flex gap-8">
+          <div className="mt-10 flex flex-wrap gap-x-8 gap-y-5">
             {STATS.map((stat) => (
               <div key={stat.label}>
                 <div className="text-2xl sm:text-3xl font-bold text-foreground">{stat.value}</div>

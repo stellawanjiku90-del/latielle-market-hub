@@ -5,9 +5,9 @@ import { MessageCircle, X, Send, Loader2, Bot, User, PhoneCall } from "lucide-re
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const SYSTEM_CONTEXT = `You are a helpful support assistant for LATIELLE MARKET HUB — Kenya's trusted marketplace for buying and selling verified businesses. 
+const SYSTEM_CONTEXT = `You provide customer support for LATIELLE MARKET HUB, a marketplace for businesses for sale in Kenya.
 
-You help users with:
+You can help users with:
 - How to list a business for sale
 - How to browse and buy businesses
 - How payments work (M-Pesa, listing fees, detail request fees)
@@ -15,12 +15,12 @@ You help users with:
 - How the KES 1,000 confidential details request works
 - General questions about the platform
 
-Keep answers concise and practical. If the user has a complex issue that needs human help, acknowledge it and tell them to email realityofafrica2023@gmail.com or use the contact form. Always be friendly and professional.`;
+Keep answers short, clear and practical. Do not invent policies, fees or promises. If a question needs a staff member, direct the user to realityofafrica2023@gmail.com.`;
 
 export default function HelpChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hello! 👋 I'm the LATIELLE MARKET HUB support assistant. How can I help you today?\n\nI can answer questions about listing a business, buying, payments, or verification." }
+    { role: "assistant", content: "Hello. How can we help?\n\nYou can ask about listing a business, buying, payments or account verification." }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

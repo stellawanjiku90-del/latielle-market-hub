@@ -35,7 +35,7 @@ const FEATURES = [
 
 export default function TrustSection() {
   return (
-    <section className="py-20 bg-muted">
+    <section className="py-16 sm:py-20 bg-background border-y border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
@@ -47,7 +47,7 @@ export default function TrustSection() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((feature) => (
-            <div key={feature.title} className="bg-card rounded-xl p-6 border border-border/50 hover:border-primary/20 hover:shadow-sm transition-all duration-300">
+            <div key={feature.title} className="bg-card rounded-xl p-6 border border-border hover:border-primary/20 hover:shadow-sm transition-all duration-300">
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                 <feature.icon className="h-5 w-5 text-primary" />
               </div>
@@ -56,11 +56,7 @@ export default function TrustSection() {
             </div>
           ))}
         </div>
-        <div className="mt-10 text-center">
-          <p className="text-xs text-slate-600 max-w-xl mx-auto">
-            <strong>Important:</strong> LATIELLE MARKET HUB is an independent marketplace. A verification label does not mean that a business is government-certified or guarantee that a business will be profitable. Buyers should carry out their own checks before completing a purchase.
-          </p>
-        </div>
+
       </div>
     </section>
   );

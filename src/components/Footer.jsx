@@ -17,9 +17,6 @@ export default function Footer() {
             <p className="text-sm text-white/65 mt-4">
               Contact: <a href="mailto:realityofafrica2023@gmail.com" className="underline hover:text-white">realityofafrica2023@gmail.com</a>
             </p>
-            <p className="text-xs text-white/55 mt-3 max-w-xl leading-5">
-              LATIELLE MARKET HUB is an independent marketplace, not a government authority or official verification body.
-            </p>
           </div>
           <div>
             <h4 className="font-semibold text-sm mb-4 text-white">Platform</h4>
@@ -38,7 +35,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="border-t border-white/10 mt-10 pt-6 text-center">
-          <p className="text-xs text-white/55">{"© "}{new Date().getFullYear()}{" LATIELLE MARKET HUB. All rights reserved."}</p>
+          <p className="text-xs text-white/80">{"© "}{new Date().getFullYear()}{" LATIELLE MARKET HUB. All rights reserved."}</p>
         </div>
       </div>
     </footer>
