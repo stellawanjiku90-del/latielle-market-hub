@@ -1,13 +1,14 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export async function request(path, options = {}) {
-  const token = localStorage.getItem("auth_token");
+  const { skipAuth = false, ...fetchOptions } = options;
+  const token = skipAuth ? null : localStorage.getItem("auth_token");
   const headers = {
-    ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+    ...(fetchOptions.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
+    ...(fetchOptions.headers || {}),
   };
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers });
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
   if (!response.ok) throw Object.assign(new Error(data?.error || data?.message || "Request failed"), { status: response.status });
