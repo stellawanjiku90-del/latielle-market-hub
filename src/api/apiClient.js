@@ -1,8 +1,4 @@
-// The app's API paths already include /api. Normalize VITE_API_URL so
-// values such as "/api" or "https://host/api" do not produce /api/api/*.
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "")
-  .replace(/\/+$/, "")
-  .replace(/\/api$/, "");
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export async function request(path, options = {}) {
   const { skipAuth = false, ...fetchOptions } = options;
@@ -12,13 +8,7 @@ export async function request(path, options = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(fetchOptions.headers || {}),
   };
-  let response;
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers });
-  } catch (error) {
-    console.error("API network request failed", { path, baseUrl: API_BASE_URL, error });
-    throw new Error("Unable to connect to Latielle Market Hub. Please check your internet connection or try again.");
-  }
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers });
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
   if (!response.ok) {
