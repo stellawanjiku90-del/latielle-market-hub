@@ -690,6 +690,7 @@ function phoneUser(row) {
 
 app.post('/api/auth/register-payment', async (req, res, next) => {
   try {
+    console.log('Public registration payment request received');
     const phone = normalizePhone(req.body.phone);
     const role = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
     const pin = String(req.body.pin || '');
@@ -741,6 +742,7 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
 
 app.get('/api/auth/registration-status/:checkoutRequestId', async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'no-store');
     const checkoutId = String(req.params.checkoutRequestId || '');
     const r = await db.query('SELECT * FROM pending_registrations WHERE checkout_request_id=$1', [checkoutId]);
     const pending = r.rows[0];
