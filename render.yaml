@@ -13,6 +13,8 @@ services:
         generateValue: true
       - key: MPESA_SHORTCODE
         sync: false
+      - key: MPESA_PARTY_B
+        sync: false
       - key: MPESA_PASSKEY
         sync: false
       - key: MPESA_CONSUMER_KEY
