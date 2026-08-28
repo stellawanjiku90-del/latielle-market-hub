@@ -651,6 +651,7 @@ function mpesaConfig() {
     consumerKey: process.env.MPESA_CONSUMER_KEY,
     consumerSecret: process.env.MPESA_CONSUMER_SECRET,
     callbackUrl: process.env.MPESA_CALLBACK_URL,
+    partyB: process.env.MPESA_PARTY_B || process.env.MPESA_SHORTCODE,
   };
 }
 
@@ -720,7 +721,7 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
         TransactionType: process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',
         Amount: 100,
         PartyA: phone.slice(1),
-        PartyB: cfg.shortcode,
+        PartyB: cfg.partyB,
         PhoneNumber: phone.slice(1),
         CallBackURL: cfg.callbackUrl,
         AccountReference: 'LATIELLE',
@@ -878,22 +879,16 @@ app.delete('/api/entities/:entity/:id', auth(), async(req,res,next)=>{try{const 
 ===================================================== */
 app.post('/api/functions/:name', async(req,res,next)=>{
  try{const n=req.params.name,p=req.body||{};
-  if(n==='loginWithPin') {
-    const phone=normalizePhone(p.phone), pin=String(p.pin||'');
+  if(n==='loginWithPin') return res.redirect(307, '/api/auth/login-pin');
+  if(n==='setPin') {
+    const pin=String(p.pin||'');
     if(!/^\d{4}$/.test(pin)) return res.status(400).json({error:'PIN must be exactly 4 digits'});
-    const r=await db.query('SELECT * FROM users WHERE phone=$1',[phone]);
-    const u=r.rows[0];
-    if(!u) return res.status(401).json({error:'No account found for this phone number. Please create an account first.'});
-    if(!u.pin_hash) return res.status(400).json({error:'No PIN is set for this account. Please complete registration.'});
-    if(u.pin_locked_until && new Date(u.pin_locked_until).getTime()>Date.now()) return res.status(429).json({error:'Too many attempts. Please try again later.'});
-    if(!(await bcrypt.compare(pin,u.pin_hash))){
-      const attempts=Number(u.failed_login_attempts||0)+1;
-      if(attempts>=5) await db.query('UPDATE users SET failed_login_attempts=0,pin_locked_until=NOW()+INTERVAL \'15 minutes\' WHERE id=$1',[u.id]);
-      else await db.query('UPDATE users SET failed_login_attempts=$2 WHERE id=$1',[u.id,attempts]);
-      return res.status(401).json({error:'Invalid phone number or PIN'});
-    }
-    await db.query('UPDATE users SET failed_login_attempts=0,pin_locked_until=NULL WHERE id=$1',[u.id]);
-    return res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});
+    const userId=p.userId || req.user?.id;
+    if(!userId) return res.status(401).json({error:'Authentication required'});
+    const hash=await bcrypt.hash(pin,12);
+    const r=await db.query('UPDATE users SET pin_hash=$2,has_pin=true WHERE id=$1 RETURNING *',[userId,hash]);
+    if(!r.rows[0]) return res.status(404).json({error:'User not found'});
+    return res.json({success:true,user:phoneUser(r.rows[0])});
   }
   if(n==='submitDetailRequest') { const r=await db.query('INSERT INTO detail_requests(listing_id,buyer_id,message) VALUES($1,$2,$3) RETURNING *',[p.listingId||p.listing_id, p.buyerId||req.user?.id, p.message||'']);return res.json({success:true,request:r.rows[0]}); }
   if(n==='mpesaStkPush') {
