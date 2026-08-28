@@ -11,9 +11,15 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: MPESA_SHORTCODE
+      - key: CLOUDINARY_CLOUD_NAME
         sync: false
-      - key: MPESA_PARTY_B
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ADMIN_PHONES
+        value: +254703927978,+254706692111
+      - key: MPESA_SHORTCODE
         sync: false
       - key: MPESA_PASSKEY
         sync: false
@@ -26,4 +32,4 @@ services:
       - key: MPESA_ENV
         value: production
       - key: MPESA_TRANSACTION_TYPE
-        value: CustomerPayBillOnline
+        value: CustomerBuyGoodsOnline

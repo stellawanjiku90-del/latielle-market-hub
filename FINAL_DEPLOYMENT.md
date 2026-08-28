@@ -15,6 +15,6 @@ Set the Web Service environment variables:
 - `DATABASE_URL` = Render PostgreSQL connection URL
 - `JWT_SECRET` = long random secret
 - `CLIENT_URL` = your public app URL
-- `VITE_API_URL` = leave blank for the single-service deployment (the frontend already calls `/api/*`)
+- `VITE_API_URL=/api`
 
 The Express server serves both the built React application and `/api/*`, so one public URL is used.
