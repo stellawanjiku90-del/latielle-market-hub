@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const SECTIONS = [
   {
     title: "1. About LATIELLE MARKET HUB",
-    content: "LATIELLE MARKET HUB is a private marketplace that connects people who want to buy or sell businesses in Kenya. We are not a government authority, licensing body or professional advisory service."
+    content: "LATIELLE MARKET HUB provides a platform where people can list, find and discuss businesses for sale in Kenya."
   },
   {
     title: "2. Accounts",
@@ -16,7 +16,7 @@ const SECTIONS = [
   },
   {
     title: "4. Verification",
-    content: "A verification or document-review label means that the stated check was completed by LATIELLE MARKET HUB. It is not a government certificate, guarantee of income or guarantee that a transaction is safe."
+    content: "A verification or document-review label shows that the listed check has been completed. It does not replace the checks a buyer should make before purchasing a business."
   },
   {
     title: "5. Payments and Fees",
@@ -32,7 +32,7 @@ const SECTIONS = [
   },
   {
     title: "8. Transactions Between Users",
-    content: "LATIELLE MARKET HUB provides the marketplace and communication tools. Buyers and sellers remain responsible for their own negotiations, checks, agreements and decisions. Buyers should carry out independent due diligence before paying for a business."
+    content: "LATIELLE MARKET HUB provides the marketplace and communication tools. Buyers and sellers are responsible for their negotiations, agreements and decisions."
   },
   {
     title: "9. Account and Data Deletion",

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const SECTIONS = [
   {
     title: "1. Information We Collect",
-    content: "When you use LATIELLE MARKET HUB, we may collect your name, phone number, email address, identification details, profile information and documents you choose to upload. We collect this information when you register, verify your account, create a listing or use other parts of the service."
+    content: "When you use LATIELLE MARKET HUB, we may collect your name, phone number, email address, profile information and documents you choose to upload. We collect this information when you register, verify your account, create a listing or use other parts of the service."
   },
   {
     title: "2. How We Use Your Information",
@@ -12,11 +12,11 @@ const SECTIONS = [
   },
   {
     title: "3. Storage and Security",
-    content: "We take reasonable steps to protect information held by the platform. Access to account and verification information is limited to people and systems that need it to operate the service. No online service can guarantee absolute security."
+    content: "We use reasonable security measures to protect information held by the platform. Access is limited to people and systems that need the information to operate the service."
   },
   {
     title: "4. When We Share Information",
-    content: "We do not sell your personal information. We may share information when it is needed to provide a service you requested, when you approve the release of private business information, or when disclosure is required by law."
+    content: "We do not sell your personal information. We may share information when it is needed to provide a service you requested or when the law requires us to do so."
   },
   {
     title: "5. Business Information",

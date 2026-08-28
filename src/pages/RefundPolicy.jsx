@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const SECTIONS = [
   {
     title: "1. General Policy",
-    content: "Fees are normally non-refundable after the service connected to the payment has been provided or the listing or request has entered processing."
+    content: "Fees are generally not refundable once the paid service has been provided or processing has started."
   },
   {
     title: "2. Listing Fees",
@@ -20,7 +20,7 @@ const SECTIONS = [
   },
   {
     title: "5. Fraud or Misrepresentation",
-    content: "If our investigation confirms that a seller materially misrepresented a listing, we may refund an affected buyer where appropriate. Each case is reviewed using the information available to us."
+    content: "If our investigation confirms that a seller materially misrepresented a listing, we may refund an affected buyer where appropriate. We review each case using the transaction and listing records available to us."
   },
   {
     title: "6. How to Request a Refund",
@@ -28,7 +28,7 @@ const SECTIONS = [
   },
   {
     title: "7. Processing",
-    content: "Approved refunds are normally processed within 7 business days. The exact timing can also depend on the payment provider."
+    content: "Approved refunds are normally processed within 7 business days. Processing time may also depend on the payment provider."
   },
   {
     title: "8. Contact",

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/api/apiClient";
 import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, LogIn, UserPlus, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowRight, Star, LogIn, UserPlus, ShieldCheck, TrendingUp } from "lucide-react";
 import HeroSection from "../components/HeroSection";
 import TrustSection from "../components/TrustSection";
 import ListingCard from "../components/ListingCard";
@@ -32,7 +32,7 @@ export default function Home() {
 
       {/* Inline Auth Section for guests */}
       {!user && (
-        <section className="py-12 bg-muted/70 border-y border-border/40">
+        <section id="account" className="scroll-mt-24 py-12 bg-muted border-y border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col lg:flex-row items-center gap-8">
               <div className="flex-1 text-center lg:text-left">
@@ -68,7 +68,7 @@ export default function Home() {
       )}
 
       {/* Featured Listings */}
-      <section className="py-20">
+      <section id="featured" className="scroll-mt-24 py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-10">
             <div>
@@ -105,35 +105,35 @@ export default function Home() {
 
       <TrustSection />
 
-      {/* Practical guide */}
-      <section className="py-20 bg-white">
+      {/* Testimonials */}
+      <section id="testimonials" className="scroll-mt-24 py-16 sm:py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-10">
-            <h2 className="text-3xl sm:text-4xl font-semibold text-foreground">A simple place to buy or sell a business</h2>
-            <p className="mt-3 text-muted-foreground">Use the marketplace to find a business, review the information available, and contact the seller.</p>
+          <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground">What our users say</h2>
+            <p className="mt-3 text-base text-muted-foreground">Feedback from buyers and sellers who have used the marketplace.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white border border-border rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-2">Looking to buy?</h3>
-              <p className="text-sm text-muted-foreground leading-6">Search by business type or location, open a listing, and request the information you need before making a decision.</p>
-            </div>
-            <div className="bg-white border border-border rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-2">Selling a business?</h3>
-              <p className="text-sm text-muted-foreground leading-6">Create a listing, provide the required documents, and respond to buyers through the platform.</p>
-            </div>
-            <div className="bg-white border border-border rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-2">Keep private details private</h3>
-              <p className="text-sm text-muted-foreground leading-6">Sensitive business information is not displayed publicly. Approved requests are handled through the platform.</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6">
+            {TESTIMONIALS.map((t) => (
+              <article key={t.name} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div className="flex gap-1 mb-4" aria-label="5 out of 5 stars">
+                  {[1,2,3,4,5].map(i => <Star key={i} className="h-4 w-4 fill-primary text-primary" />)}
+                </div>
+                <p className="text-base text-foreground leading-7 mb-5">“{t.text}”</p>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{t.name}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{t.county}</p>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-20 bg-primary text-primary-foreground">
+      <section id="get-started" className="scroll-mt-24 py-16 sm:py-20 bg-primary text-primary-foreground">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold">Ready to buy or sell?</h2>
-          <p className="mt-4 text-white/90">Browse businesses for sale or create a listing for your own business.</p>
+          <p className="mt-4 text-primary-foreground/90">Browse businesses for sale or list your own business.</p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Link to="/create-listing"><Button size="lg" variant="secondary" className="font-body">Sell a Business</Button></Link>
             <Link to="/browse"><Button size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10">Browse Businesses</Button></Link>

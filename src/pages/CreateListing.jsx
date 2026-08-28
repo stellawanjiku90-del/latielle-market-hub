@@ -65,25 +65,25 @@ const REASON_OPTIONS = [
 ];
 
 const DESCRIPTION_TEMPLATES = [
-  { label: "Well-established business", text: "This is a well-established business with a loyal customer base built over the years. Located in a prime area with high foot traffic, it benefits from strong brand recognition in the local community. The business is fully operational with trained staff, established supplier relationships, and consistent monthly revenue. This is a turnkey opportunity for any buyer looking to step into a profitable and running enterprise." },
-  { label: "Prime location, strong revenue", text: "Strategically located in a high-traffic area, this business has been generating strong and consistent monthly revenue. The premises are well-maintained, and all equipment is in excellent working condition. The business serves a large and loyal client base, with significant room for growth through expanded services and marketing. Full operational support will be offered during handover." },
-  { label: "Growth opportunity", text: "This business presents a great growth opportunity for an ambitious entrepreneur. Currently operating at moderate capacity, there is significant untapped potential to scale revenues through increased marketing, extended operating hours, and additional product/service offerings. The current infrastructure and setup are solid, making this an ideal acquisition for a buyer ready to take it to the next level." },
-  { label: "Family-run, retiring seller", text: "This is a thriving family-run business that has served our community with pride for many years. Due to the owner's retirement, we are now offering it for sale to someone who can continue its legacy. The business has a strong reputation, established clientele, and reliable staff. All financials, records, and supplier contacts will be shared with a serious buyer." },
-  { label: "Online/service-based business", text: "This is a fully online/service-based business that can be operated from anywhere. It comes with an established client portfolio, recurring service contracts, and a strong digital presence. The business requires low overhead and minimal physical infrastructure, making it ideal for a buyer seeking a flexible, location-independent income stream. All systems, tools, and client relationships will be transferred upon sale." },
+  { label: "Established business", text: "Describe how long the business has operated, what it sells, where it is located, and the main customers it serves." },
+  { label: "Location and sales", text: "Describe the location, customer traffic and recent sales. Include figures only if you can support them with your records." },
+  { label: "Room to grow", text: "Explain the areas where a new owner could improve the business, such as opening hours, products, services or marketing." },
+  { label: "Owner is moving on", text: "Explain why the business is being sold and give a short description of its current operations, staff and customers." },
+  { label: "Online or service business", text: "Describe how the business operates, where customers come from, the services provided and what will be transferred to the buyer." },
 ];
 
 const SUPPLIER_TEMPLATES = [
-  { label: "Multiple local suppliers", text: "The business sources products from multiple reliable local suppliers with established credit terms. Key suppliers have been partners for over 2 years and offer competitive pricing. A full supplier list with contacts will be shared upon request after sale." },
-  { label: "Single main supplier", text: "The business operates with one primary supplier who provides consistent stock on a weekly/monthly basis. The relationship is strong and the supplier has indicated willingness to continue with a new owner. Payment terms and credit limits are well-established." },
-  { label: "Imported goods", text: "Products are sourced directly from international suppliers, primarily through established import channels. The business benefits from competitive pricing due to bulk purchasing. Full import documentation, supplier contacts, and ordering procedures will be handed over to the buyer." },
-  { label: "Service-based, no physical stock", text: "As a service-based business, there are no physical product suppliers. All service tools, software subscriptions, and vendor relationships are in place and will be transferred to the new owner upon sale." },
+  { label: "Several local suppliers", text: "List the main suppliers, what you buy from them and the payment terms you currently use." },
+  { label: "Main supplier", text: "Describe the main supplier, what they provide and how often you place orders." },
+  { label: "Imported goods", text: "Describe where imported stock comes from and the usual ordering and delivery process." },
+  { label: "Service business", text: "List the software, tools and other providers needed to run the service." },
 ];
 
 const STAFF_TEMPLATES = [
-  { label: "Small dedicated team", text: "The business has a small, dedicated team of trained employees who are familiar with daily operations. Staff are experienced, reliable, and willing to continue under new ownership. Full details on roles, responsibilities, and salary structure will be provided to serious buyers." },
-  { label: "Owner-operated", text: "The business is primarily owner-operated with minimal staff support. Day-to-day operations are managed directly by the owner, making it easy to transition to a new owner with a short handover period." },
-  { label: "Larger workforce", text: "The business employs a well-organized team across various roles including operations, sales, and support. All staff are on formal employment contracts. HR records, staff performance history, and salary schedules will be disclosed to the buyer after signing an NDA." },
-  { label: "Part-time/casual staff", text: "The business uses a mix of part-time and casual staff during peak periods. This keeps labour costs flexible and manageable. A breakdown of shifts, pay rates, and staffing needs will be shared with a serious buyer." },
+  { label: "Small team", text: "State the number of employees, their main duties and whether they are expected to remain after the sale." },
+  { label: "Owner-operated", text: "Explain which parts of the business are handled by the owner and what a new owner would need to take over." },
+  { label: "Larger team", text: "Give the number of employees and a short description of the main roles and responsibilities." },
+  { label: "Part-time staff", text: "Explain how many part-time or casual workers are used and when they are normally needed." },
 ];
 
 const GROSS_SALES_RANGES = ["Under KES 50,000", "KES 50,000 - 100,000", "KES 100,000 - 250,000", "KES 250,000 - 500,000", "KES 500,000 - 1,000,000", "Over KES 1,000,000"];
