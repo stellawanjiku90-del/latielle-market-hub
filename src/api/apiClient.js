@@ -11,7 +11,12 @@ export async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers });
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
-  if (!response.ok) throw Object.assign(new Error(data?.error || data?.message || "Request failed"), { status: response.status });
+  if (!response.ok) {
+    const message = (data && typeof data === "object" ? (data.error || data.message) : "") ||
+      (typeof data === "string" && data.trim() ? data.trim().slice(0, 300) : "") ||
+      `Request failed (HTTP ${response.status})`;
+    throw Object.assign(new Error(message), { status: response.status });
+  }
   return data;
 }
 
