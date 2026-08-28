@@ -62,6 +62,9 @@ export const api = {
     resetPassword(payload) { return request("/api/auth/reset-password", { method: "POST", body: JSON.stringify(payload) }); },
   },
   entities,
+  functions: {
+    async invoke(name, payload = {}) { return apiFunction(name, payload); },
+  },
   integrations: {
     Core: {
       async UploadFile({ file }) {

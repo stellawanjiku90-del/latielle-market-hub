@@ -32,6 +32,7 @@ async function request(path, options = {}) {
 }
 
 export const base44 = {
+  request,
   auth: {
     async login({ email, password }) {
       const data = await request("/api/auth/login", {
@@ -129,9 +130,8 @@ export const base44 = {
 
   functions: {
     async invoke(name, payload = {}) {
-      throw new Error(
-        `Base44 function "${name}" is no longer available. Replace this call with an Express API endpoint.`
-      );
+      const data = await request(`/api/functions/${encodeURIComponent(name)}`, { method: "POST", body: JSON.stringify(payload) });
+      return { data };
     },
   },
 };
