@@ -179,7 +179,7 @@ export default function HelpChatWidget() {
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold font-heading">LATIELLE Support</p>
-              <p className="text-[10px] opacity-80">AI Assistant · Usually instant</p>
+              <p className="text-[10px] opacity-80">Help chat · Usually instant</p>
             </div>
             <button onClick={() => setOpen(false)}><X className="h-4 w-4 opacity-70 hover:opacity-100" /></button>
           </div>
@@ -197,7 +197,7 @@ export default function HelpChatWidget() {
                   "max-w-[80%] rounded-2xl px-3 py-2 text-sm font-body leading-relaxed whitespace-pre-line",
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground rounded-tr-sm"
-                    : "bg-secondary text-foreground rounded-tl-sm"
+                    : "bg-muted text-foreground rounded-tl-sm"
                 )}>
                   {msg.content}
                 </div>
@@ -213,7 +213,7 @@ export default function HelpChatWidget() {
                 <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <Bot className="h-3 w-3 text-primary" />
                 </div>
-                <div className="bg-secondary rounded-2xl rounded-tl-sm px-3 py-2">
+                <div className="bg-muted rounded-2xl rounded-tl-sm px-3 py-2">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 </div>
               </div>
