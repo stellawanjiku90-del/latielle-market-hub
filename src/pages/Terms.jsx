@@ -4,58 +4,60 @@ import { Link } from "react-router-dom";
 const SECTIONS = [
   {
     title: "1. About LATIELLE MARKET HUB",
-    content: "LATIELLE MARKET HUB is an independent digital marketplace that connects business sellers with potential buyers in Kenya. We are NOT a government authority, NOT a licensing body, NOT a legal advisory service, and NOT an official business verification authority. We provide enhanced seller and buyer verification to promote safer transactions, but we do not guarantee the accuracy of any business information listed on the platform."
+    content: "LATIELLE MARKET HUB is a private marketplace that connects people who want to buy or sell businesses in Kenya. We are not a government authority, licensing body or professional advisory service."
   },
   {
-    title: "2. User Accounts",
-    content: "Users must provide accurate information when registering. Sellers must verify their identity through ID and selfie uploads. Buyers must register and verify their accounts before requesting confidential business details. We reserve the right to suspend or terminate accounts that violate our terms or are involved in fraudulent activity."
+    title: "2. Accounts",
+    content: "You must provide information that is true and current when you create an account. Keep your PIN and account information private. We may suspend an account where there is evidence of fraud, abuse or a serious breach of these terms."
   },
   {
-    title: "3. Business Listings",
-    content: "All business listings are submitted by sellers and reviewed by our team before publication. The review process includes checking for completeness and basic consistency, but does NOT constitute official business verification, certification, or endorsement. Business information is provided by the seller and LATIELLE MARKET HUB does not guarantee its accuracy, completeness, or truthfulness."
+    title: "3. Seller Listings",
+    content: "Sellers are responsible for the information in their listings. We review submitted listings for completeness and obvious issues, but our review is not a government certification and does not guarantee that a business is profitable or that every statement made by a seller is correct."
   },
   {
-    title: "4. Verification Badges",
-    content: "Verification badges such as 'Verified Seller', 'Documents Reviewed', and 'Identity Confirmed' indicate that the seller has completed our internal verification process. These badges do NOT represent government verification, official business certification, guaranteed profitability, or legal/financial guarantees of any kind."
+    title: "4. Verification",
+    content: "A verification or document-review label means that the stated check was completed by LATIELLE MARKET HUB. It is not a government certificate, guarantee of income or guarantee that a transaction is safe."
   },
-
+  {
+    title: "5. Payments and Fees",
+    content: "Fees shown on the platform must be paid through the payment method provided. A payment does not by itself create a sale or transfer ownership of a business. Refunds are handled under our Refund Policy."
+  },
   {
     title: "6. Confidential Information",
-    content: "Confidential business information (exact location, financial documents, supplier details, staff information, seller contact) is protected and only shared with buyers who have paid the required fee and been approved by the seller. Buyers must not share confidential information with third parties without the seller's written consent."
+    content: "Private business information is supplied for the buyer\'s evaluation of the listed business. You must not copy, publish or pass that information to another person without the seller\'s permission."
   },
   {
-    title: "7. Fraud Prevention",
-    content: "We actively monitor the platform for fraudulent activity, duplicate listings, and suspicious behavior. Users can report suspicious listings or users. We may take action including suspension of accounts found to be engaging in fraudulent or deceptive practices."
+    title: "7. Prohibited Conduct",
+    content: "Do not use the platform to impersonate another person, submit false documents, mislead another user, attempt to bypass payment or verification controls, or use the service for unlawful activity."
   },
   {
-    title: "8. Disclaimer of Liability",
-    content: "LATIELLE MARKET HUB provides a marketplace platform only. We do not participate in negotiations, transactions, or agreements between buyers and sellers. We do not guarantee the profitability, viability, or legitimacy of any business listed. Buyers should conduct their own due diligence, including hiring professional advisors, before making any business purchase decisions. LATIELLE MARKET HUB is not liable for any losses arising from transactions between users."
+    title: "8. Transactions Between Users",
+    content: "LATIELLE MARKET HUB provides the marketplace and communication tools. Buyers and sellers remain responsible for their own negotiations, checks, agreements and decisions. Buyers should carry out independent due diligence before paying for a business."
   },
-
   {
-    title: "9. Data Deletion",
-    content: "Users may request deletion of their account and associated personal data at any time by contacting us at realityofafrica2023@gmail.com. We will process all deletion requests within 30 days in compliance with applicable data protection laws."
+    title: "9. Account and Data Deletion",
+    content: "You may ask for your account to be deleted by contacting realityofafrica2023@gmail.com. Some records may need to be retained where required by law or for legitimate business records."
   },
   {
     title: "10. Contact",
-    content: "For questions, concerns, or to report fraud, contact us at: realityofafrica2023@gmail.com. We aim to respond to all inquiries within 48 hours."
-  },
+    content: "For questions, complaints or reports of suspected fraud, contact realityofafrica2023@gmail.com. Please do not send your PIN or payment password by email."
+  }
 ];
 
 export default function Terms() {
   return (
     <div className="pt-20 pb-16 min-h-screen">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-body mb-6 hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />Back to Home
         </Link>
-        <h1 className="font-heading text-3xl font-bold mb-2">{"Terms & Conditions"}</h1>
-        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: May 2025</p>
+        <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2">{"Terms & Conditions"}</h1>
+        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: August 2026</p>
         <div className="space-y-8">
           {SECTIONS.map(section => (
             <div key={section.title}>
-              <h2 className="font-heading text-lg font-semibold text-foreground mb-2">{section.title}</h2>
-              <p className="text-sm text-muted-foreground font-body leading-relaxed">{section.content}</p>
+              <h2 className="font-heading text-xl font-semibold text-foreground mb-2">{section.title}</h2>
+              <p className="text-base text-muted-foreground font-body leading-7">{section.content}</p>
             </div>
           ))}
         </div>

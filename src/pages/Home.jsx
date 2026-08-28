@@ -36,8 +36,8 @@ export default function Home() {
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col lg:flex-row items-center gap-8">
               <div className="flex-1 text-center lg:text-left">
-                <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">Join Kenya's Trusted Business Marketplace — LATIELLE MARKET HUB</h2>
-                <p className="mt-2 text-muted-foreground font-body">Create an account to list, browse, or request confidential business details.</p>
+                <h2 className="font-heading text-2xl sm:text-3xl font-bold text-foreground">Buy or sell a business in Kenya</h2>
+                <p className="mt-2 text-muted-foreground font-body">Create an account to browse listings, sell a business, or request more information.</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 shrink-0">
                 <div className="bg-card border border-border/60 rounded-xl p-5 text-center w-56 hover:border-primary/30 hover:shadow-md transition-all">
@@ -45,7 +45,7 @@ export default function Home() {
                     <UserPlus className="h-6 w-6 text-primary" />
                   </div>
                   <h3 className="font-heading text-base font-semibold mb-1">New User?</h3>
-                  <p className="text-xs text-muted-foreground font-body mb-3">Create your free account today</p>
+                  <p className="text-xs text-muted-foreground font-body mb-3">Create an account to get started</p>
                   <Link to="/login"><Button className="w-full font-body text-sm">Sign Up Free</Button></Link>
                   </div>
                   <div className="bg-card border border-border/60 rounded-xl p-5 text-center w-56 hover:border-primary/30 hover:shadow-md transition-all">
@@ -73,7 +73,7 @@ export default function Home() {
           <div className="flex items-end justify-between mb-10">
             <div>
               <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground">Featured Businesses</h2>
-              <p className="mt-2 text-muted-foreground font-body">Verified businesses currently available for sale</p>
+              <p className="mt-2 text-muted-foreground font-body">Businesses currently available for sale</p>
             </div>
             <Link to="/browse">
               <Button variant="outline" className="hidden sm:flex gap-2 font-body">
@@ -108,7 +108,7 @@ export default function Home() {
       {/* Testimonials */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground text-center mb-12">What Our Users Say</h2>
+          <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground text-center mb-12">What Sellers and Buyers Say</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {TESTIMONIALS.map((t) => (
               <div key={t.name} className="bg-card border border-border/50 rounded-xl p-6">
@@ -128,7 +128,7 @@ export default function Home() {
       <section className="py-20 bg-primary text-primary-foreground">
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="font-heading text-3xl sm:text-4xl font-bold">Ready to Get Started?</h2>
-          <p className="mt-4 font-body opacity-90">Join Kenya's most trusted business marketplace. List your business or find your next investment on LATIELLE MARKET HUB.</p>
+          <p className="mt-4 font-body opacity-90">Browse businesses for sale or list your own business on LATIELLE MARKET HUB.</p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Link to="/create-listing"><Button size="lg" variant="secondary" className="font-body">Sell a Business</Button></Link>
             <Link to="/browse"><Button size="lg" variant="outline" className="font-body border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10">Browse Businesses</Button></Link>

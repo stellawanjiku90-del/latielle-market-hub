@@ -4,60 +4,60 @@ import { Link } from "react-router-dom";
 const SECTIONS = [
   {
     title: "1. Information We Collect",
-    content: "We collect personal information including names, email addresses, phone numbers, ID numbers, and selfie photos. This information is collected during account registration and identity verification processes."
+    content: "When you use LATIELLE MARKET HUB, we may collect your name, phone number, email address, identification details, profile information and documents you choose to upload. We collect this information when you register, verify your account, create a listing or use other parts of the service."
   },
   {
     title: "2. How We Use Your Information",
-    content: "Your information is used to verify your identity, facilitate transactions between buyers and sellers, and maintain platform security. We use this data to review business listings, process detail requests, and communicate important platform updates with you."
+    content: "We use your information to create and secure your account, verify sellers, process payments, manage listings and requests, and communicate with you about your account. We also use it to investigate reports and protect the marketplace from misuse."
   },
   {
-    title: "3. Data Storage & Security",
-    content: "All personal data is stored securely using industry-standard encryption and access controls. We take reasonable technical and organizational measures to protect your information against unauthorized access, loss, or misuse."
+    title: "3. Storage and Security",
+    content: "We take reasonable steps to protect information held by the platform. Access to account and verification information is limited to people and systems that need it to operate the service. No online service can guarantee absolute security."
   },
   {
-    title: "4. Sharing of Information",
-    content: "We do not sell or rent your personal information to third parties. Your data may be shared only as required to facilitate approved transactions on the platform (e.g., sharing seller contact with an approved buyer), or to comply with applicable legal requirements."
+    title: "4. When We Share Information",
+    content: "We do not sell your personal information. We may share information when it is needed to provide a service you requested, when you approve the release of private business information, or when disclosure is required by law."
   },
   {
-    title: "5. Confidential Business Data",
-    content: "Confidential business information uploaded by sellers (financial documents, lease details, supplier info) is only shared with buyers who have paid the required fee and received explicit seller approval. Buyers must not redistribute this information to third parties."
+    title: "5. Business Information",
+    content: "Sellers may upload financial records, licences, leases, supplier information and other business documents. Information marked or treated as confidential is not intended for public viewing and is released only through the platform\'s approval process."
   },
   {
-    title: "6. Your Rights",
-    content: "You have the right to access, correct, or request deletion of your personal data. To request account or data deletion, please contact us through the platform. We will process your request within a reasonable timeframe in accordance with applicable law."
+    title: "6. Your Choices and Rights",
+    content: "You may ask us to correct information that is inaccurate and may request deletion of your account and personal information, subject to records we are required to keep by law."
   },
   {
-    title: "7. Cookies",
-    content: "Our platform may use cookies and similar technologies to maintain your session, remember your preferences, and improve your experience. You can disable cookies in your browser settings, though this may affect platform functionality."
+    title: "7. Cookies and Local Storage",
+    content: "The website uses browser storage and similar technologies to keep you signed in and remember necessary settings. Your browser may allow you to clear or block these technologies, although doing so can affect some features."
   },
   {
     title: "8. Changes to This Policy",
-    content: "We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated date. Continued use of the platform after changes are posted constitutes your acceptance of the revised policy."
+    content: "If we make a material change to this policy, we will update the date shown on this page. The version published here is the version that applies to your use of the service."
   },
   {
-    title: "9. Data Deletion Request",
-    content: "You have the right to request deletion of your personal data and account at any time. To submit a deletion request, email us at realityofafrica2023@gmail.com with the subject line 'Data Deletion Request' and include your registered email address. We will process all requests within 30 days."
+    title: "9. Data Deletion",
+    content: "To request deletion of your account or personal information, email realityofafrica2023@gmail.com with the subject 'Data Deletion Request' and include the email address or phone number linked to your account. We will review the request and respond within 30 days."
   },
   {
     title: "10. Contact",
-    content: "If you have questions about this Privacy Policy or how your data is handled, please contact us at: realityofafrica2023@gmail.com. We aim to respond to all privacy-related inquiries within 48 hours."
-  },
+    content: "Questions about privacy can be sent to realityofafrica2023@gmail.com. Please include enough information for us to identify the issue without sending passwords, PINs or other account credentials."
+  }
 ];
 
 export default function PrivacyPolicy() {
   return (
     <div className="pt-20 pb-16 min-h-screen">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-body mb-6 hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />Back to Home
         </Link>
-        <h1 className="font-heading text-3xl font-bold mb-2">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: May 2025</p>
+        <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2">Privacy Policy</h1>
+        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: August 2026</p>
         <div className="space-y-8">
           {SECTIONS.map(section => (
             <div key={section.title}>
-              <h2 className="font-heading text-lg font-semibold text-foreground mb-2">{section.title}</h2>
-              <p className="text-sm text-muted-foreground font-body leading-relaxed">{section.content}</p>
+              <h2 className="font-heading text-xl font-semibold text-foreground mb-2">{section.title}</h2>
+              <p className="text-base text-muted-foreground font-body leading-7">{section.content}</p>
             </div>
           ))}
         </div>
