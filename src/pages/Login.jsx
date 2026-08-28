@@ -90,7 +90,11 @@ export default function Login() {
           finalizeLogin(result.user, "/profile");
           return;
         }
-        if (result.status === "failed") { setError("M-Pesa payment was not completed. Please try again."); return; }
+        if (result.status === "failed") {
+          const details = [result.reason, result.resultCode != null ? `Result code: ${result.resultCode}` : ""].filter(Boolean).join(" ");
+          setError(details ? `M-Pesa payment was not completed. ${details}` : "M-Pesa payment was not completed. Please try again.");
+          return;
+        }
       } catch (err) { /* keep polling while payment is pending */ }
       setTimeout(poll, 3000);
     };
