@@ -71,4 +71,5 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS result_description TEXT;
 CREATE INDEX IF NOT EXISTS pending_reg_checkout_idx ON pending_registrations(checkout_request_id);
