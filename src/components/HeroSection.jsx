@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const STATS = [
-  { value: "500+", label: "Verified Businesses" },
-  { value: "2,000+", label: "Trusted Buyers" },
+  { value: "500+", label: "Businesses listed" },
+  { value: "2,000+", label: "M-Pesa payments Buyers" },
   { value: "47", label: "Counties Covered" },
 ];
 
@@ -30,13 +30,13 @@ export default function HeroSection() {
           <div className="flex items-center gap-2 mb-6">
             <span className="inline-flex items-center gap-1.5 text-xs font-body font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
               <ShieldCheck className="h-3.5 w-3.5" />
-              Trusted Marketplace
+              Business marketplace
             </span>
           </div>
           
           <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
-            {"Buy & Sell"} <br />
-            <span className="text-primary">Verified Businesses</span>
+            {"Buy and Sell"} <br />
+            <span className="text-primary">Businesses listed</span>
             <br />in Kenya
           </h1>
           
@@ -49,7 +49,7 @@ export default function HeroSection() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search businesses, categories, locations..."
+                placeholder="Search by business, category or location"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-10 h-12 text-sm font-body bg-background border-border/80"
@@ -59,9 +59,9 @@ export default function HeroSection() {
           </form>
 
           <div className="mt-10 flex items-center gap-6 text-sm text-muted-foreground font-body">
-            <div className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" />Seller Verified</div>
-            <div className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-primary" />Confidential</div>
-            <div className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-primary" />Trusted</div>
+            <div className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" />Seller checks</div>
+            <div className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-primary" />Private details</div>
+            <div className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-primary" />M-Pesa payments</div>
           </div>
 
           <div className="mt-12 flex gap-8">

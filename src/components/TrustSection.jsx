@@ -3,33 +3,33 @@ import { ShieldCheck, Lock, FileCheck, Eye, MessageSquare, CreditCard } from "lu
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: "Identity Verified Sellers",
-    description: "Every seller undergoes ID and selfie verification before listing. Look for the Verified Seller badge.",
+    title: "Seller identity checks",
+    description: "Sellers complete an identity check before they can publish a listing.",
   },
   {
     icon: Lock,
-    title: "Protected Confidential Details",
-    description: "Sensitive business information is locked until buyers verify and pay. No casual browsing of private data.",
+    title: "Private business details",
+    description: "Financial records, supplier information and other private details are only released through the platform after the required approval.",
   },
   {
     icon: FileCheck,
-    title: "Documents Reviewed",
-    description: "Uploaded business documents are reviewed by our team. Listings show review status transparently.",
+    title: "Business documents reviewed",
+    description: "Documents submitted with a listing are checked by our team, and the listing shows the relevant review status.",
   },
   {
     icon: Eye,
-    title: "Fraud Monitoring",
-    description: "Automated and manual checks flag suspicious listings, duplicate accounts, and misleading information.",
+    title: "Fraud checks",
+    description: "We look for duplicate accounts, suspicious listings and information that does not appear consistent.",
   },
   {
     icon: MessageSquare,
-    title: "Secure In-Platform Chat",
-    description: "Communicate safely within the platform before sharing personal contact details.",
+    title: "In-platform chat",
+    description: "Buyers and sellers can communicate through the platform before deciding whether to exchange contact details.",
   },
   {
     icon: CreditCard,
-    title: "M-Pesa Payments",
-    description: "All payments via M-Pesa STK Push. Transparent pricing, instant confirmation, digital receipts.",
+    title: "M-Pesa payments",
+    description: "Payments are made through M-Pesa STK Push, with the payment status recorded on the platform.",
   },
 ];
 
@@ -39,7 +39,7 @@ export default function TrustSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground">
-            {"Built on Trust & Verification"}
+            {"Checks that help buyers and sellers"}
           </h2>
           <p className="mt-4 text-muted-foreground font-body leading-relaxed">
             Unlike ordinary classifieds, LATIELLE MARKET HUB adds multiple layers of verification 

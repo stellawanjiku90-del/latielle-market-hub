@@ -6,10 +6,16 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 const isImageFile = (file) => file.type.startsWith("image/");
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
 
 const enhanceImage = (file) => new Promise((resolve) => {
   const img = new window.Image();
   const objectUrl = URL.createObjectURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(file);
+  };
   img.onload = () => {
     // Cap at 1000px — fast processing + smaller upload
     const maxDim = 1000;
@@ -41,21 +47,33 @@ export default function FileUploader({ label, accept, multiple = false, value = 
   const handleFiles = async (files) => {
     if (!files.length) return;
     setUploading(true);
+    setStatus("Preparing...");
     const uploaded = [];
-    for (const file of Array.from(files)) {
-      let fileToUpload = file;
-      if (isImageFile(file)) {
-        setStatus("Enhancing...");
-        fileToUpload = await enhanceImage(file);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_FILE_SIZE) {
+          throw new Error(`${file.name} is larger than 50 MB. Please choose a smaller file.`);
+        }
+        let fileToUpload = file;
+        if (isImageFile(file)) {
+          setStatus("Preparing photo...");
+          fileToUpload = await enhanceImage(file);
+        }
+        setStatus(`Uploading ${uploaded.length + 1} of ${files.length}...`);
+        const result = await api.integrations.Core.UploadFile({ file: fileToUpload });
+        if (!result?.file_url) throw new Error("The server did not return a file address.");
+        uploaded.push(result.file_url);
       }
-      setStatus("Uploading...");
-      const { file_url } = await api.integrations.Core.UploadFile({ file: fileToUpload });
-      uploaded.push(file_url);
+      onChange(multiple ? [...value, ...uploaded] : [uploaded[0]]);
+      toast.success(`${uploaded.length} file(s) uploaded`);
+    } catch (error) {
+      console.error("File upload failed", error);
+      toast.error(error?.message || "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      setStatus("");
+      if (inputRef.current) inputRef.current.value = "";
     }
-    onChange(multiple ? [...value, ...uploaded] : [uploaded[0]]);
-    setUploading(false);
-    setStatus("");
-    toast.success(`${uploaded.length} file(s) uploaded`);
   };
 
   const remove = (url) => onChange(value.filter(u => u !== url));
