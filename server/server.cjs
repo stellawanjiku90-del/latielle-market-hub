@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const db = require('./db.cjs');
 
 const app = express();
@@ -582,34 +583,6 @@ app.get(
    PAYMENT CALLBACK
 ===================================================== */
 
-app.post(
-  '/api/payments/mpesa/callback',
-  async (req, res, next) => {
-    try {
-      await db.query(
-        `
-        INSERT INTO payment_events (
-          provider,
-          payload
-        )
-        VALUES ($1, $2)
-        `,
-        [
-          'mpesa',
-          JSON.stringify(req.body),
-        ]
-      );
-
-      res.json({
-        ResultCode: 0,
-        ResultDesc: 'Accepted',
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
 /* =====================================================
    SERVE REACT FRONTEND
 ===================================================== */
@@ -655,70 +628,190 @@ app.use((error, _req, res, _next) => {
    PHONE AUTHENTICATION
 ===================================================== */
 function normalizePhone(phone) {
-  return String(phone || '').replace(/\s+/g, '');
+  let value = String(phone || '').trim().replace(/[\s-]/g, '');
+  if (value.startsWith('00')) value = '+' + value.slice(2);
+  if (value.startsWith('0') && value.length === 10) value = '+254' + value.slice(1);
+  if (/^254\d{9}$/.test(value)) value = '+' + value;
+  return value;
+}
+
+function isKenyanPhone(phone) {
+  return /^\+254[17]\d{8}$/.test(normalizePhone(phone));
+}
+
+function mpesaConfig() {
+  const required = ['MPESA_SHORTCODE', 'MPESA_PASSKEY', 'MPESA_CONSUMER_KEY', 'MPESA_CONSUMER_SECRET', 'MPESA_CALLBACK_URL'];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length) throw new Error(`Missing M-Pesa environment variables: ${missing.join(', ')}`);
+  const production = (process.env.MPESA_ENV || 'production').toLowerCase() === 'production';
+  return {
+    baseUrl: production ? 'https://api.safaricom.co.ke' : 'https://sandbox.safaricom.co.ke',
+    shortcode: process.env.MPESA_SHORTCODE,
+    passkey: process.env.MPESA_PASSKEY,
+    consumerKey: process.env.MPESA_CONSUMER_KEY,
+    consumerSecret: process.env.MPESA_CONSUMER_SECRET,
+    callbackUrl: process.env.MPESA_CALLBACK_URL,
+  };
+}
+
+async function mpesaAccessToken() {
+  const cfg = mpesaConfig();
+  const credentials = Buffer.from(`${cfg.consumerKey}:${cfg.consumerSecret}`).toString('base64');
+  const response = await fetch(`${cfg.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+    headers: { Authorization: `Basic ${credentials}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.access_token) throw new Error(data.errorMessage || 'Unable to authenticate with M-Pesa');
+  return { token: data.access_token, cfg };
+}
+
+function mpesaPassword(shortcode, passkey, timestamp) {
+  return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
 }
 function phoneUser(row) {
   if (!row) return null;
   return {
-    id: row.id, phone_number: row.phone, full_name: row.name || '', role: row.role,
-    is_verified: row.phone_verified, has_pin: row.has_pin, bio: row.bio, gender: row.gender,
-    county: row.county, subcounty: row.subcounty, profile_picture: row.profile_picture,
-    favorites: row.favorites || [], verification_status: row.verification_status || 'unverified',
+    id: row.id,
+    phone_number: row.phone,
+    full_name: row.name || '',
+    role: row.role,
+    is_verified: row.phone_verified,
+    has_pin: row.has_pin,
+    bio: row.bio,
+    gender: row.gender,
+    county: row.county,
+    subcounty: row.subcounty,
+    profile_picture: row.profile_picture,
+    favorites: row.favorites || [],
+    verification_status: row.verification_status || 'unverified',
   };
 }
 
-app.post('/api/auth/send-otp', async (req, res, next) => {
+app.post('/api/auth/register-payment', async (req, res, next) => {
   try {
     const phone = normalizePhone(req.body.phone);
-    if (!phone || phone.length < 10) return res.status(400).json({ error: 'Valid phone number is required' });
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    await db.query(`UPDATE otp_codes SET consumed=true WHERE phone=$1 AND consumed=false`, [phone]);
-    await db.query(`INSERT INTO otp_codes(phone, code, expires_at) VALUES($1,$2,NOW()+INTERVAL '10 minutes')`, [phone, code]);
-    console.log(`[LATIELLE OTP] ${phone}: ${code}`);
-    res.json({ success: true, message: 'Verification code generated', dev_code: process.env.NODE_ENV === 'production' ? undefined : code });
+    const role = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
+    const pin = String(req.body.pin || '');
+    if (!isKenyanPhone(phone)) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
+    if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+
+    const existing = await db.query('SELECT id, phone_verified FROM users WHERE phone=$1', [phone]);
+    if (existing.rows[0]) {
+      return res.status(409).json({ error: existing.rows[0].phone_verified ? 'This phone number is already registered. Sign in with your PIN.' : 'This phone number already has a registration in progress.' });
+    }
+
+    const pinHash = await bcrypt.hash(pin, 12);
+    await db.query(`
+      INSERT INTO pending_registrations(phone, role, pin_hash, amount, status, updated_at)
+      VALUES($1,$2,$3,100,'pending',NOW())
+      ON CONFLICT(phone) DO UPDATE SET role=EXCLUDED.role, pin_hash=EXCLUDED.pin_hash, amount=100, status='pending', merchant_request_id=NULL, checkout_request_id=NULL, mpesa_receipt=NULL, result_code=NULL, updated_at=NOW()
+    `, [phone, role, pinHash]);
+
+    const { token: accessToken, cfg } = await mpesaAccessToken();
+    const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+    const password = mpesaPassword(cfg.shortcode, cfg.passkey, timestamp);
+    const response = await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        BusinessShortCode: cfg.shortcode,
+        Password: password,
+        Timestamp: timestamp,
+        TransactionType: process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',
+        Amount: 100,
+        PartyA: phone.slice(1),
+        PartyB: cfg.shortcode,
+        PhoneNumber: phone.slice(1),
+        CallBackURL: cfg.callbackUrl,
+        AccountReference: 'LATIELLE',
+        TransactionDesc: 'Account Verify',
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ResponseCode !== '0') {
+      return res.status(502).json({ error: data.errorMessage || data.ResponseDescription || 'M-Pesa payment request failed.' });
+    }
+
+    await db.query(`UPDATE pending_registrations SET merchant_request_id=$2, checkout_request_id=$3, updated_at=NOW() WHERE phone=$1`, [phone, data.MerchantRequestID || null, data.CheckoutRequestID || null]);
+
+    res.json({ success: true, checkoutRequestId: data.CheckoutRequestID, message: 'M-Pesa payment prompt sent. Approve KSh 100 on your phone.' });
   } catch (e) { next(e); }
 });
 
-app.post('/api/auth/verify-otp', async (req, res, next) => {
+app.get('/api/auth/registration-status/:checkoutRequestId', async (req, res, next) => {
   try {
-    const phone = normalizePhone(req.body.phone), code = String(req.body.code || ''), role = ['buyer','seller'].includes(req.body.role) ? req.body.role : 'buyer';
-    const otp = await db.query(`SELECT * FROM otp_codes WHERE phone=$1 AND code=$2 AND consumed=false AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1`, [phone, code]);
-    if (!otp.rows[0]) return res.status(400).json({ error: 'Invalid or expired verification code' });
-    await db.query(`UPDATE otp_codes SET consumed=true WHERE id=$1`, [otp.rows[0].id]);
-    let u = (await db.query(`SELECT * FROM users WHERE phone=$1`, [phone])).rows[0];
-    if (!u) {
-      u = (await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified) VALUES($1,$2,$3,$4,$5,true) RETURNING *`, ['','phone+'+phone+'@latielle.local', await bcrypt.hash(String(Math.random()), 8), role, phone])).rows[0];
-    } else {
-      await db.query(`UPDATE users SET phone_verified=true, role=CASE WHEN role='admin' THEN role ELSE $2 END WHERE id=$1`, [u.id, role]);
-      u = (await db.query(`SELECT * FROM users WHERE id=$1`, [u.id])).rows[0];
+    const checkoutId = String(req.params.checkoutRequestId || '');
+    const r = await db.query('SELECT * FROM pending_registrations WHERE checkout_request_id=$1', [checkoutId]);
+    const pending = r.rows[0];
+    if (!pending) return res.status(404).json({ error: 'Registration payment not found.' });
+    if (pending.status === 'paid') {
+      const u = (await db.query('SELECT * FROM users WHERE phone=$1', [pending.phone])).rows[0];
+      if (u) return res.json({ success: true, status: 'paid', user: phoneUser(u), token: token({ id: u.id, email: u.email, role: u.role }) });
     }
-    res.json({ success: true, user: phoneUser(u), token: token({id:u.id,email:u.email,role:u.role}) });
-  } catch(e) { next(e); }
+    res.json({ success: true, status: pending.status });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/payments/mpesa/callback', async (req, res, next) => {
+  try {
+    await db.query(`INSERT INTO payment_events(provider,payload) VALUES($1,$2)`, ['mpesa', JSON.stringify(req.body)]);
+    const stk = req.body?.Body?.stkCallback;
+    const checkoutId = stk?.CheckoutRequestID;
+    const resultCode = Number(stk?.ResultCode);
+    if (checkoutId) {
+      const pending = (await db.query('SELECT * FROM pending_registrations WHERE checkout_request_id=$1', [checkoutId])).rows[0];
+      if (pending) {
+        if (resultCode === 0) {
+          const items = stk.CallbackMetadata?.Item || [];
+          const getItem = (name) => items.find((item) => item.Name === name)?.Value;
+          const amount = Number(getItem('Amount') || 0);
+          const receipt = getItem('MpesaReceiptNumber') || null;
+          const phone = normalizePhone(getItem('PhoneNumber') ? String(getItem('PhoneNumber')) : pending.phone);
+          if (amount !== 100 || phone !== pending.phone) {
+            await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, updated_at=NOW() WHERE id=$1`, [pending.id, 1]);
+          } else {
+            const client = await db.pool?.connect?.();
+            // db.cjs exposes query only; use a transaction through its pool when available.
+            if (client) {
+              try {
+                await client.query('BEGIN');
+                const existing = await client.query('SELECT * FROM users WHERE phone=$1 FOR UPDATE', [pending.phone]);
+                let u = existing.rows[0];
+                if (!u) {
+                  u = (await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') RETURNING *`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash])).rows[0];
+                }
+                await client.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, updated_at=NOW() WHERE id=$1`, [pending.id, receipt]);
+                await client.query('COMMIT');
+              } catch (txError) { await client.query('ROLLBACK'); throw txError; } finally { client.release(); }
+            } else {
+              await db.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, updated_at=NOW() WHERE id=$1`, [pending.id, receipt]);
+              await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO NOTHING`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash]);
+            }
+          }
+        } else {
+          await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, updated_at=NOW() WHERE id=$1`, [pending.id, resultCode]);
+        }
+      }
+    }
+    res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+  } catch (error) { next(error); }
 });
 
 app.post('/api/auth/login-pin', async (req,res,next)=>{
   try {
     const phone=normalizePhone(req.body.phone), pin=String(req.body.pin||'');
     const r=await db.query(`SELECT * FROM users WHERE phone=$1`,[phone]); const u=r.rows[0];
-    if(!u || !u.pin_hash || !(await bcrypt.compare(pin,u.pin_hash))) return res.status(401).json({error:'Invalid phone number or PIN'});
+    if(!u || !u.phone_verified || !u.pin_hash || !(await bcrypt.compare(pin,u.pin_hash))) return res.status(401).json({error:'Invalid phone number or PIN'});
     res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});
   }catch(e){next(e)}
 });
 
 app.post('/api/auth/set-pin', auth(), async (req,res,next)=>{
-  try {
-    const pin=String(req.body.pin||''); if(!/^\d{4}$/.test(pin)) return res.status(400).json({error:'PIN must be exactly 4 digits'});
-    const hash=await bcrypt.hash(pin,12); const r=await db.query(`UPDATE users SET pin_hash=$2,has_pin=true WHERE id=$1 RETURNING *`,[req.user.id,hash]);
-    res.json({success:true,user:phoneUser(r.rows[0])});
-  }catch(e){next(e)}
+  try { const pin=String(req.body.pin||''); if(!/^\d{4}$/.test(pin)) return res.status(400).json({error:'PIN must be exactly 4 digits'}); const hash=await bcrypt.hash(pin,12); const r=await db.query('UPDATE users SET pin_hash=$2,has_pin=true WHERE id=$1 RETURNING *',[req.user.id,hash]); if(!r.rows[0])return res.status(404).json({error:'User not found'}); res.json({success:true,user:phoneUser(r.rows[0])}); }catch(e){next(e)}
 });
 
 app.patch('/api/auth/profile', auth(), async (req,res,next)=>{
-  try { const allowed=['name','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs','verification_status'];
-    const sets=[], vals=[req.user.id]; for(const k of allowed) if(req.body[k]!==undefined){sets.push(`${k}=$${vals.length+1}`); vals.push(typeof req.body[k]==='object'?JSON.stringify(req.body[k]):req.body[k]);}
-    if(!sets.length) return res.json(phoneUser((await db.query('SELECT * FROM users WHERE id=$1',vals)).rows[0]));
-    const r=await db.query(`UPDATE users SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals); res.json(phoneUser(r.rows[0]));
-  }catch(e){next(e)}
+  try { const allowed=['name','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs','verification_status']; const sets=[], vals=[req.user.id]; for(const k of allowed) if(req.body[k]!==undefined){sets.push(`${k}=$${vals.length+1}`); vals.push(typeof req.body[k]==='object'?JSON.stringify(req.body[k]):req.body[k]);} if(!sets.length) return res.json(phoneUser((await db.query('SELECT * FROM users WHERE id=$1',vals)).rows[0])); const r=await db.query(`UPDATE users SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals); res.json(phoneUser(r.rows[0])); }catch(e){next(e)}
 });
 
 /* =====================================================
@@ -785,18 +878,21 @@ app.delete('/api/entities/:entity/:id', auth(), async(req,res,next)=>{try{const 
 ===================================================== */
 app.post('/api/functions/:name', async(req,res,next)=>{
  try{const n=req.params.name,p=req.body||{};
-  if(n==='loginWithPin'){const r=await db.query('SELECT * FROM users WHERE phone=$1',[normalizePhone(p.phone)]);const u=r.rows[0];if(!u||!u.pin_hash||!(await bcrypt.compare(String(p.pin||''),u.pin_hash)))return res.status(401).json({error:'Invalid phone number or PIN'});return res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});}
-  if(n==='sendOTP') { req.url='/api/auth/send-otp'; const phone=normalizePhone(p.phone); const code=String(Math.floor(100000+Math.random()*900000)); await db.query('UPDATE otp_codes SET consumed=true WHERE phone=$1',[phone]); await db.query("INSERT INTO otp_codes(phone,code,expires_at) VALUES($1,$2,NOW()+INTERVAL '10 minutes')",[phone,code]); console.log(`[LATIELLE OTP] ${phone}: ${code}`); return res.json({success:true,dev_code:process.env.NODE_ENV==='production'?undefined:code}); }
-  if(n==='verifyOTP') { const r=await db.query(`SELECT * FROM otp_codes WHERE phone=$1 AND code=$2 AND consumed=false AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1`,[normalizePhone(p.phone),String(p.code||'')]);if(!r.rows[0])return res.status(400).json({error:'Invalid or expired verification code'});await db.query('UPDATE otp_codes SET consumed=true WHERE id=$1',[r.rows[0].id]);let u=(await db.query('SELECT * FROM users WHERE phone=$1',[normalizePhone(p.phone)])).rows[0];if(!u)u=(await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified) VALUES('',$1,$2,$3,$4,true) RETURNING *`,['phone+'+normalizePhone(p.phone)+'@latielle.local',await bcrypt.hash(String(Math.random()),8),['buyer','seller'].includes(p.role)?p.role:'buyer',normalizePhone(p.phone)])).rows[0];return res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})}); }
-  if(n==='setPin') { const hash=await bcrypt.hash(String(p.pin||''),12); const r=await db.query('UPDATE users SET pin_hash=$2,has_pin=true WHERE id=$1 RETURNING *',[p.userId,hash]);if(!r.rows[0])return res.status(404).json({error:'User not found'});return res.json({success:true,user:phoneUser(r.rows[0])}); }
+  if(n==='loginWithPin') return res.redirect(307, '/api/auth/login-pin');
   if(n==='submitDetailRequest') { const r=await db.query('INSERT INTO detail_requests(listing_id,buyer_id,message) VALUES($1,$2,$3) RETURNING *',[p.listingId||p.listing_id, p.buyerId||req.user?.id, p.message||'']);return res.json({success:true,request:r.rows[0]}); }
-  if(n==='mpesaStkPush') return res.json({success:false,error:'M-Pesa STK integration requires valid production credentials',status:'not_configured'});
+  if(n==='mpesaStkPush') {
+    // Existing listing-payment flow.
+    const phone=normalizePhone(p.phone); const amount=Number(p.amount||0);
+    if(!isKenyanPhone(phone) || !Number.isFinite(amount) || amount<=0) return res.status(400).json({error:'Valid phone number and amount are required'});
+    const {token: accessToken,cfg}=await mpesaAccessToken(); const timestamp=new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14); const password=mpesaPassword(cfg.shortcode,cfg.passkey,timestamp);
+    const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:process.env.MPESA_TRANSACTION_TYPE || 'CustomerPayBillOnline',Amount:Math.round(amount),PartyA:phone.slice(1),PartyB:cfg.shortcode,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:String(p.detailRequestId||p.listingId||'LATIELLE'),TransactionDesc:String(p.listingTitle||'Latielle Market Hub payment').slice(0,13)})});
+    const data=await response.json().catch(()=>({})); if(!response.ok||data.ResponseCode!=='0') return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'M-Pesa payment request failed'}); return res.json({success:true,checkoutRequestId:data.CheckoutRequestID,merchantRequestId:data.MerchantRequestID,message:'M-Pesa payment prompt sent'});
+  }
   if(n==='createNotification'||n.startsWith('notify')) return res.json({success:true});
   if(n==='checkPaymentStatus') return res.json({success:true,status:'pending'});
   return res.status(404).json({error:`Unknown function: ${n}`});
  }catch(e){next(e)}
 });
-
 
 /* =====================================================
    FILES / EMAIL / PASSWORD RESET / AI FALLBACKS
