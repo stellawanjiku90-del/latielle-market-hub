@@ -69,7 +69,7 @@ export default function Login() {
     if (pinCode !== pinConfirm) { setError("PINs do not match."); return; }
     setLoading(true);
     try {
-      const data = await api.request("/api/auth/register-payment", { method: "POST", body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode }) });
+      const data = await api.request("/api/auth/register-payment", { method: "POST", skipAuth: true, body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode }) });
       setCheckoutRequestId(data.checkoutRequestId);
       setStep("payment");
       pollRegistration(data.checkoutRequestId);
@@ -83,7 +83,7 @@ export default function Login() {
     const poll = async () => {
       if (!checkoutId || attempts++ >= 40) return;
       try {
-        const result = await api.request(`/api/auth/registration-status/${encodeURIComponent(checkoutId)}`);
+        const result = await api.request(`/api/auth/registration-status/${encodeURIComponent(checkoutId)}`, { skipAuth: true });
         if (result.status === "paid" && result.token && result.user) {
           localStorage.setItem("auth_token", result.token);
           setVerifiedUser(result.user);
