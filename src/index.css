@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -12,7 +12,7 @@
     --card-foreground: 0 0% 7%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 7%;
-    --primary: 36 100% 50%;
+    --primary: 151 55% 34%;
     --primary-foreground: 0 0% 100%;
     --secondary: 213 17% 19%;
     --secondary-foreground: 0 0% 100%;
@@ -24,23 +24,23 @@
     --destructive-foreground: 0 0% 100%;
     --border: 180 5% 84%;
     --input: 180 5% 84%;
-    --ring: 36 100% 50%;
-    --chart-1: 36 100% 50%;
-    --chart-2: 50 100% 54%;
+    --ring: 151 55% 34%;
+    --chart-1: 151 55% 34%;
+    --chart-2: 142 45% 42%;
     --chart-3: 214 27% 20%;
-    --chart-4: 189 100% 26%;
-    --chart-5: 12 96% 36%;
+    --chart-4: 160 45% 30%;
+    --chart-5: 0 0% 25%;
     --radius: 0.5rem;
     --navy: 214 27% 10%;
     --navy-light: 213 17% 19%;
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 7%;
-    --sidebar-primary: 36 100% 50%;
+    --sidebar-primary: 151 55% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 6% 93%;
     --sidebar-accent-foreground: 0 0% 7%;
     --sidebar-border: 180 5% 84%;
-    --sidebar-ring: 36 100% 50%;
+    --sidebar-ring: 151 55% 34%;
     --font-heading: 'Inter', sans-serif;
     --font-body: 'Inter', sans-serif;
   }
@@ -52,7 +52,7 @@
     --card-foreground: 0 0% 95%;
     --popover: 214 25% 12%;
     --popover-foreground: 0 0% 95%;
-    --primary: 36 100% 50%;
+    --primary: 151 55% 34%;
     --primary-foreground: 0 0% 100%;
     --secondary: 213 17% 19%;
     --secondary-foreground: 0 0% 95%;
@@ -64,9 +64,9 @@
     --destructive-foreground: 0 0% 98%;
     --border: 214 20% 20%;
     --input: 214 20% 20%;
-    --ring: 36 100% 50%;
-    --chart-1: 36 100% 50%;
-    --chart-2: 50 100% 54%;
+    --ring: 151 55% 34%;
+    --chart-1: 151 55% 34%;
+    --chart-2: 142 45% 42%;
     --chart-3: 214 27% 30%;
     --chart-4: 189 100% 36%;
     --chart-5: 12 96% 46%;
@@ -74,12 +74,12 @@
     --navy-light: 213 17% 19%;
     --sidebar-background: 214 25% 10%;
     --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 36 100% 50%;
+    --sidebar-primary: 151 55% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 214 20% 16%;
     --sidebar-accent-foreground: 0 0% 90%;
     --sidebar-border: 214 20% 20%;
-    --sidebar-ring: 36 100% 50%;
+    --sidebar-ring: 151 55% 34%;
   }
 }
 
@@ -130,6 +130,31 @@
 
 .page-transition {
   animation: pageSlideIn 0.22s ease-out;
+}
+
+/* Standard application typography and device-safe layout */
+html {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-width: 320px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100dvh;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Keep fixed controls clear of notches, rounded corners and browser UI. */
+.safe-page-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
 /* On mobile, add bottom padding so content clears the bottom nav + safe area */
