@@ -8,6 +8,18 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('./db.cjs');
 
+const ADMIN_PHONES = new Set(
+  (process.env.ADMIN_PHONES || '+254703927978,+254706692111')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+
+function isAdminPhone(phone) {
+  return ADMIN_PHONES.has(normalizePhone(phone));
+}
+
+
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -21,21 +33,11 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is required');
 }
 
-const allowedOrigins = [
-  ...(process.env.CLIENT_URL || '').split(',').map((value) => value.trim()).filter(Boolean),
-  process.env.RENDER_EXTERNAL_URL,
-].filter(Boolean);
-
 app.use(
   cors({
-    origin(origin, callback) {
-      // Same-origin requests have no Origin header and should always be allowed.
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      console.warn('CORS blocked origin:', origin);
-      return callback(new Error('CORS origin not allowed'));
-    },
+    origin: process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.split(',')
+      : true,
   })
 );
 
@@ -56,36 +58,42 @@ function token(user) {
 }
 
 function auth(roles) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const header = req.headers.authorization || '';
-
-    const tokenValue = header.startsWith('Bearer ')
-      ? header.slice(7)
-      : null;
+    const tokenValue = header.startsWith('Bearer ') ? header.slice(7) : null;
 
     if (!tokenValue) {
-      return res.status(401).json({
-        error: 'Authentication required',
-      });
+      return res.status(401).json({ error: 'Authentication required' });
     }
 
     try {
-      req.user = jwt.verify(tokenValue, JWT_SECRET);
+      const claims = jwt.verify(tokenValue, JWT_SECRET);
+      const result = await db.query(
+        `SELECT id, name, email, role, phone FROM users WHERE id=$1`,
+        [claims.id]
+      );
+      const user = result.rows[0];
+      if (!user) return res.status(401).json({ error: 'Account not found' });
 
-      if (
-        roles &&
-        !roles.includes(req.user.role)
-      ) {
-        return res.status(403).json({
-          error: 'Forbidden',
-        });
+      // Admin access is tied to the approved phone numbers, not to a client-side role.
+      // This also repairs an older account automatically if its database role was changed.
+      if (isAdminPhone(user.phone) && user.role !== 'admin') {
+        const updated = await db.query(
+          `UPDATE users SET role='admin' WHERE id=$1 RETURNING id, name, email, role, phone`,
+          [user.id]
+        );
+        if (updated.rows[0]) Object.assign(user, updated.rows[0]);
       }
 
+      req.user = { ...claims, id: user.id, email: user.email, role: user.role, phone: user.phone };
+
+      if (roles && !roles.includes(req.user.role)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       next();
-    } catch {
-      return res.status(401).json({
-        error: 'Invalid or expired token',
-      });
+    } catch (error) {
+      console.error('Authentication check failed', error.message);
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
   };
 }
@@ -707,13 +715,17 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
   try {
     console.log('Public registration payment request received');
     const phone = normalizePhone(req.body.phone);
-    const role = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
+    const requestedRole = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
+    const role = isAdminPhone(phone) ? 'admin' : requestedRole;
     const pin = String(req.body.pin || '');
     if (!isKenyanPhone(phone)) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
 
-    const existing = await db.query('SELECT id, phone_verified FROM users WHERE phone=$1', [phone]);
+    const existing = await db.query('SELECT id, phone_verified, role FROM users WHERE phone=$1', [phone]);
     if (existing.rows[0]) {
+      if (isAdminPhone(phone) && existing.rows[0].role !== 'admin') {
+        await db.query(`UPDATE users SET role='admin' WHERE id=$1`, [existing.rows[0].id]);
+      }
       return res.status(409).json({ error: existing.rows[0].phone_verified ? 'This phone number is already registered. Sign in with your PIN.' : 'This phone number already has a registration in progress.' });
     }
 
@@ -827,15 +839,19 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
                 await client.query('BEGIN');
                 const existing = await client.query('SELECT * FROM users WHERE phone=$1 FOR UPDATE', [pending.phone]);
                 let u = existing.rows[0];
+                const assignedRole = isAdminPhone(pending.phone) ? 'admin' : pending.role;
                 if (!u) {
-                  u = (await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') RETURNING *`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash])).rows[0];
+                  u = (await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') RETURNING *`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), assignedRole, pending.phone, pending.pin_hash])).rows[0];
+                } else if (isAdminPhone(pending.phone) && u.role !== 'admin') {
+                  u = (await client.query(`UPDATE users SET role='admin' WHERE id=$1 RETURNING *`, [u.id])).rows[0];
                 }
                 await client.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, updated_at=NOW() WHERE id=$1`, [pending.id, receipt]);
                 await client.query('COMMIT');
               } catch (txError) { await client.query('ROLLBACK'); throw txError; } finally { client.release(); }
             } else {
               await db.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, receipt, resultDescription || 'Payment completed successfully']);
-              await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO NOTHING`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash]);
+              const assignedRole = isAdminPhone(pending.phone) ? 'admin' : pending.role;
+              await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO UPDATE SET role=CASE WHEN $3='admin' THEN 'admin' ELSE users.role END`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), assignedRole, pending.phone, pending.pin_hash]);
             }
           }
         } else {
@@ -852,6 +868,10 @@ app.post('/api/auth/login-pin', async (req,res,next)=>{
     const phone=normalizePhone(req.body.phone), pin=String(req.body.pin||'');
     const r=await db.query(`SELECT * FROM users WHERE phone=$1`,[phone]); const u=r.rows[0];
     if(!u || !u.phone_verified || !u.pin_hash || !(await bcrypt.compare(pin,u.pin_hash))) return res.status(401).json({error:'Invalid phone number or PIN'});
+    if (isAdminPhone(phone) && u.role !== 'admin') {
+      const updated = await db.query(`UPDATE users SET role='admin' WHERE id=$1 RETURNING *`, [u.id]);
+      if (updated.rows[0]) Object.assign(u, updated.rows[0]);
+    }
     res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});
   }catch(e){next(e)}
 });
@@ -957,7 +977,89 @@ app.post('/api/functions/:name', async(req,res,next)=>{
 /* =====================================================
    FILES / EMAIL / PASSWORD RESET / AI FALLBACKS
 ===================================================== */
-app.post('/api/upload', auth(), (req,res)=>res.status(501).json({error:'File upload storage is not configured. Add S3/Cloudinary credentials before production uploads.'}));
+function parseMultipartFile(req) {
+  return new Promise((resolve, reject) => {
+    const contentType = req.headers['content-type'] || '';
+    const match = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+    if (!match) return reject(new Error('Invalid multipart upload.'));
+    const boundary = Buffer.from(`--${match[1] || match[2]}`);
+    const chunks = [];
+    let size = 0;
+    const maxBytes = 50 * 1024 * 1024;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes + 1024 * 1024) {
+        reject(new Error('File is larger than the 50 MB upload limit.'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('error', reject);
+    req.on('end', () => {
+      try {
+        const body = Buffer.concat(chunks);
+        const start = body.indexOf(Buffer.from('\r\n\r\n'));
+        if (start < 0) throw new Error('Could not read the uploaded file.');
+        const headerText = body.slice(0, start).toString('utf8');
+        const disposition = headerText.match(/filename="([^"]*)"/i);
+        const typeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i);
+        if (!disposition) throw new Error('No file was included in the upload.');
+        const filename = path.basename(disposition[1] || 'upload');
+        const contentTypeValue = (typeMatch?.[1] || 'application/octet-stream').trim();
+        const fileStart = start + 4;
+        const endMarker = Buffer.concat([Buffer.from('\r\n'), boundary]);
+        const fileEnd = body.indexOf(endMarker, fileStart);
+        if (fileEnd < 0) throw new Error('The upload was incomplete.');
+        const buffer = body.slice(fileStart, fileEnd);
+        if (!buffer.length) throw new Error('The uploaded file is empty.');
+        resolve({ filename, contentType: contentTypeValue, buffer });
+      } catch (error) { reject(error); }
+    });
+  });
+}
+
+function cloudinarySignature(params, secret) {
+  const payload = Object.keys(params).sort().map((key) => `${key}=${params[key]}`).join('&');
+  return crypto.createHash('sha1').update(payload + secret).digest('hex');
+}
+
+app.post('/api/upload', auth(), async (req, res, next) => {
+  try {
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(503).json({ error: 'File storage is not configured. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Render.' });
+    }
+
+    const file = await parseMultipartFile(req);
+    const resourceType = file.contentType.startsWith('video/') ? 'video'
+      : file.contentType.startsWith('image/') ? 'image' : 'raw';
+    const timestamp = Math.floor(Date.now() / 1000);
+    const folder = `latielle-market-hub/${req.user.id}`;
+    const signature = cloudinarySignature({ folder, timestamp }, apiSecret);
+    const form = new FormData();
+    form.append('file', new Blob([file.buffer], { type: file.contentType }), file.filename);
+    form.append('api_key', apiKey);
+    form.append('timestamp', String(timestamp));
+    form.append('folder', folder);
+    form.append('signature', signature);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+      method: 'POST',
+      body: form,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.secure_url) {
+      console.error('Cloudinary upload failed', { status: response.status, error: data.error?.message || data });
+      return res.status(502).json({ error: data.error?.message || 'File upload failed. Please try again.' });
+    }
+    res.json({ file_url: data.secure_url, public_id: data.public_id, resource_type: data.resource_type });
+  } catch (error) {
+    next(error);
+  }
+});
 app.post('/api/email', auth(), (req,res)=>res.json({success:true,queued:false,message:'Email provider not configured'}));
 app.post('/api/ai', auth(), (req,res)=>res.json({success:true,answer:'AI support is not configured on this deployment yet.'}));
 app.post('/api/auth/forgot-password', async (_req,res)=>res.json({success:true,message:'Password reset is not used for phone/PIN accounts.'}));
