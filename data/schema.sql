@@ -55,3 +55,20 @@ CREATE INDEX IF NOT EXISTS entity_records_data_idx ON entity_records USING GIN(d
 
 ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_status_check;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+
+CREATE TABLE IF NOT EXISTS pending_registrations (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ phone TEXT NOT NULL UNIQUE,
+ role TEXT NOT NULL DEFAULT 'buyer' CHECK(role IN('buyer','seller')),
+ pin_hash TEXT NOT NULL,
+ merchant_request_id TEXT,
+ checkout_request_id TEXT,
+ amount NUMERIC(12,2) NOT NULL DEFAULT 100,
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN('pending','paid','failed','expired')),
+ mpesa_receipt TEXT,
+ result_code INTEGER,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS pending_reg_checkout_idx ON pending_registrations(checkout_request_id);
