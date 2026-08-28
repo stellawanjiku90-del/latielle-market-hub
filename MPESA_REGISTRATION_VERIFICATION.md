@@ -14,3 +14,6 @@ Required Render variables:
 - MPESA_TRANSACTION_TYPE=CustomerPayBillOnline (use CustomerBuyGoodsOnline if the shortcode is a Till)
 
 The callback only activates an account when Safaricom reports success, the amount is exactly KSh 100, and the callback phone matches the pending registration.
+
+## STK troubleshooting
+If the API accepts the STK request but no prompt arrives, Render logs now record the exact Safaricom callback `ResultCode` and `ResultDesc`. Verify that `MPESA_TRANSACTION_TYPE` matches the business number: `CustomerPayBillOnline` for a PayBill and `CustomerBuyGoodsOnline` for a Till/Buy Goods number. Do not mark the payment as successful unless the callback returns `ResultCode: 0`.
