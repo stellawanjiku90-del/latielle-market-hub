@@ -1,6 +1,6 @@
 /**
  * Custom phone-based auth session manager.
- * Stores the user session in localStorage, independent of Base44 auth.
+ * Stores the user session in localStorage for the phone/PIN authentication flow.
  */
 
 const SESSION_KEY = 'latielle_phone_session';
