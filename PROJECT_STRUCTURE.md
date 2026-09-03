@@ -1,10 +1,11 @@
 # Latielle Market Hub structure
 
-```
+```text
 /
-├── data/       Backend/data files only; no subfolders
-├── public/     Static files served by Vite; no subfolders
-├── src/        React application source
+├── data/       Database schema and exported data/function definitions
+├── public/     Static files and PWA assets
+├── server/     Express API and database connection
+├── src/        React application
 ├── package.json
 ├── package-lock.json
 ├── index.html
@@ -12,10 +13,4 @@
 └── configuration files
 ```
 
-## Backend export
-Files in `data/` are intentionally flattened for easy GitHub upload.
-Their original Base44 paths are encoded using `__`.
-
-Before deploying Base44 functions directly, restore each file to its path
-described in `data/manifest.json`, because Base44 expects its conventional
-directory structure for entities and functions.
+The production server serves both the Vite build and `/api/*`, so Render only needs one web service.

@@ -1,20 +1,26 @@
-# Latielle Market Hub final deployment
+# LATIELLE MARKET HUB — deployment
 
-## One Render Web Service
-Build command:
+The application is designed to run as one Render Web Service.
+
+Build:
 `npm install && npm run build`
 
-Start command:
+Start:
 `npm start`
 
-## PostgreSQL
-Create a Render PostgreSQL database, then run `data/schema.sql` using Render's database shell or any PostgreSQL client.
+The Express server serves the Vite production build and `/api/*` from the same origin.
 
-Set the Web Service environment variables:
-- `NODE_ENV=production`
-- `DATABASE_URL` = Render PostgreSQL connection URL
-- `JWT_SECRET` = long random secret
-- `CLIENT_URL` = your public app URL
-- `VITE_API_URL=/api`
+## Secrets
+Set real credentials in Render Environment. Never put secrets in React code, `VITE_*` variables, GitHub, or the ZIP archive.
 
-The Express server serves both the built React application and `/api/*`, so one public URL is used.
+For the support chat, set:
+- `OPENAI_API_KEY` to the current OpenAI project key.
+- `OPENAI_MODEL=gpt-5.6-luna`.
+
+The backend owns the support instructions and sends requests to OpenAI's Responses API. The browser only sends conversation text to `/api/ai`.
+
+For support email, use the verified domain sender:
+`LATIELLE MARKET HUB <support@latiellemarkethub.co.ke>`
+
+Send support notifications to:
+`realityofafrica2023@gmail.com`

@@ -1,4 +1,3 @@
-# Vite config repair
+# Vite configuration
 
-The previous vite.config.js was invalid JavaScript after partial Base44 plugin removal.
-It has been replaced with a clean Vite + React configuration and the @ alias is preserved.
+The production build uses the root `vite.config.js`, with React support and the `@` alias mapped to `src/`. Obsolete Base44 Vite plugin configuration has been removed.

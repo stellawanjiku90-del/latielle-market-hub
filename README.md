@@ -1,8 +1,8 @@
 # Latielle Market Hub
 
-Production-oriented React/Vite marketplace frontend with a Base44 server backend.
+LATIELLE MARKET HUB is a React/Vite marketplace with a self-hosted Express/PostgreSQL backend for buying and selling established businesses across Kenya.
 
-## Quick start
+## Local setup
 
 ```bash
 cp .env.example .env
@@ -10,11 +10,13 @@ npm ci
 npm run dev
 ```
 
-## Validate
+## Production
+
+The Render web service builds the React app with Vite and serves the finished site and `/api/*` from the same Express process.
 
 ```bash
-npm run lint
-npm run build
+npm install && npm run build
+npm start
 ```
 
-See `PRODUCTION_READINESS.md` for the deployment checklist and required external configuration.
+Keep all secrets in Render environment variables. Never place OpenAI, M-Pesa, database or email credentials in frontend code or commit them to GitHub.
