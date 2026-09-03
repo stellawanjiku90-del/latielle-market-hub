@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const db = require('./db.cjs');
 
 const app = express();
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -24,6 +25,23 @@ if (!process.env.DATABASE_URL) {
 const SUPPORT_EMAIL = process.env.SUPPORT_NOTIFICATION_EMAIL || 'realityofafrica2023@gmail.com';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
 const aiRateWindow = new Map();
+const OPENAI_TIMEOUT_MS = 25_000;
+
+const OPENAI_INSTRUCTIONS = `You are the customer support assistant for LATIELLE MARKET HUB, a Kenyan marketplace for buying and selling established businesses across Kenya.
+
+Answer questions about LATIELLE MARKET HUB using only the facts below. Write like a helpful human support representative: clear, calm, concise and conversational. Do not use corporate buzzwords, sales slogans, emojis, fake testimonials, or robotic headings. Never invent fees, listings, policies, verification results, contact details, financial figures or business information. If the answer is not in the facts below, say you do not have enough information and offer human support.
+
+Platform facts:
+- LATIELLE MARKET HUB helps people discover established businesses listed for sale across Kenya's 47 counties.
+- The platform figures supplied by the business are 10,000+ established businesses and 1,000,000+ buyers.
+- Visitors can browse listings and search by business, category or location.
+- Sellers can create listings and provide business information, photos and supporting documents.
+- Account registration uses a phone number and a 4-digit PIN. The current registration verification payment is KSh 100 through M-Pesa STK Push.
+- M-Pesa payments are confirmed after Safaricom returns the transaction result.
+- Buyers can request confidential business information where the listing and platform rules allow it.
+- Human support is available at ${SUPPORT_EMAIL}.
+
+If the customer asks to speak to a person, tell them to use the “Talk to a person” button in this chat.`;
 
 function allowAiRequest(key) {
   const now = Date.now();
@@ -166,6 +184,8 @@ app.get('/api/health', async (_req, res) => {
     res.json({
       ok: true,
       database: true,
+      ai: Boolean(process.env.OPENAI_API_KEY),
+      email: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
     });
   } catch (error) {
     res.status(503).json({
@@ -1085,7 +1105,6 @@ app.post('/api/ai', optionalAuth, async (req,res,next)=>{
     if (!allowAiRequest(String(key))) return res.status(429).json({error:'Too many chat requests. Please wait a moment and try again.'});
     if (!process.env.OPENAI_API_KEY) return res.status(503).json({error:'LATIELLE support is temporarily unavailable.'});
 
-    const instructions = String(req.body?.instructions || '').slice(0, 12000);
     const input = Array.isArray(req.body?.input)
       ? req.body.input.slice(-12).map((item) => ({ role:item.role === 'assistant' ? 'assistant' : 'user', content:String(item.content || '').slice(0, 3000) }))
       : String(req.body?.prompt || '').slice(0, 10000);
@@ -1093,7 +1112,8 @@ app.post('/api/ai', optionalAuth, async (req,res,next)=>{
     const response = await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-      body:JSON.stringify({model:OPENAI_MODEL,instructions,input,store:false,max_output_tokens:700}),
+      body:JSON.stringify({model:OPENAI_MODEL,instructions:OPENAI_INSTRUCTIONS,input,store:false,max_output_tokens:700}),
+      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
     const data = await response.json().catch(()=>({}));
     if(!response.ok) {
@@ -1103,7 +1123,12 @@ app.post('/api/ai', optionalAuth, async (req,res,next)=>{
     const answer = data.output_text || data.output?.flatMap((item)=>item.content||[]).filter((item)=>item.type==='output_text').map((item)=>item.text).join('\n') || '';
     if(!answer) return res.status(502).json({error:'LATIELLE support did not return an answer.'});
     res.json({success:true,answer});
-  }catch(e){next(e)}
+  }catch(e){
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
+      return res.status(504).json({error:'LATIELLE support took too long to respond. Please try again.'});
+    }
+    next(e);
+  }
 });
 app.post('/api/auth/forgot-password', async (_req,res)=>res.json({success:true,message:'Password reset is not used for phone/PIN accounts.'}));
 app.post('/api/auth/reset-password', async (_req,res)=>res.status(400).json({error:'Password reset is not available for phone/PIN accounts.'}));
