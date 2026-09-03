@@ -40,6 +40,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_locked_until TIMESTAMPTZ;
 
+
+CREATE TABLE IF NOT EXISTS uploads (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ filename TEXT NOT NULL,
+ mime_type TEXT NOT NULL,
+ file_size INTEGER NOT NULL,
+ is_private BOOLEAN NOT NULL DEFAULT false,
+ data BYTEA NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS uploads_owner_idx ON uploads(owner_id);
+
 CREATE TABLE IF NOT EXISTS otp_codes (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), phone TEXT NOT NULL, code TEXT NOT NULL,
  expires_at TIMESTAMPTZ NOT NULL, consumed BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
