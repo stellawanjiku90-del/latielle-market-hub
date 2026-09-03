@@ -181,7 +181,7 @@ export default function AdminDashboard() {
   const salesRevenue = listings.filter(l => l.status === "sold").reduce((sum, l) => sum + (l.sold_price || 0), 0);
 
   return (
-    <div className="pt-20 pb-16 min-h-screen bg-slate-50">
+    <div className="pt-20 pb-16 min-h-screen bg-secondary/20">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="font-heading text-2xl font-bold mb-2">Admin Dashboard</h1>
         <p className="text-sm text-muted-foreground font-body mb-8">Manage users, listings, payments, and reports</p>
@@ -251,7 +251,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="requests">
-            <p className="text-xs text-muted-foreground mb-4 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            <p className="text-xs text-muted-foreground mb-4 bg-muted border border-border rounded-lg px-3 py-2">
               📩 Review each request and approve it to open a secure chat between the buyer and seller. Buyer and seller then communicate directly.
             </p>
             <div className="space-y-3">
@@ -342,7 +342,7 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="conversations">
-            <p className="text-xs text-muted-foreground mb-4 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+            <p className="text-xs text-muted-foreground mb-4 bg-muted border border-border rounded-lg px-3 py-2">
               🔒 <strong>Admin view only.</strong> You can read all conversations and leave private notes. Users are not notified of your access.
             </p>
             {/* Support chat requests highlight */}

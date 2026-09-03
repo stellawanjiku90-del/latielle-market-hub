@@ -72,7 +72,7 @@ export default function SoldBusinesses() {
             {[1, 2, 3].map(i => <div key={i} className="rounded-xl bg-muted animate-pulse h-64" />)}
           </div>
         ) : sold.length === 0 ? (
-          <div className="text-center py-20 bg-muted rounded-2xl">
+          <div className="text-center py-20 bg-secondary/30 rounded-2xl">
             <CheckCircle2 className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-muted-foreground font-body">No sold businesses to display yet.</p>
             <Link to="/browse" className="text-sm text-primary font-body mt-2 inline-block hover:underline">Browse available businesses →</Link>

@@ -104,7 +104,7 @@ export default function BuyerDashboard() {
   if (loading) return <div className="pt-24 flex justify-center"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
   return (
-    <PullToRefreshWrapper onRefresh={() => loadData()} className="pt-20 pb-16 min-h-screen bg-slate-50">
+    <PullToRefreshWrapper onRefresh={() => loadData()} className="pt-20 pb-16 min-h-screen bg-secondary/20">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-start justify-between">
           <DashboardProfileHeader session={user} title="Buyer Dashboard" />

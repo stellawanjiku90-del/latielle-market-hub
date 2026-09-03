@@ -3,62 +3,58 @@ import { Link } from "react-router-dom";
 
 const SECTIONS = [
   {
-    title: "1. About LATIELLE MARKET HUB",
-    content: "LATIELLE MARKET HUB provides a platform where people can list, find and discuss businesses for sale in Kenya."
+    title: "1. Using the platform",
+    content: "By creating an account or using LATIELLE MARKET HUB, you agree to use the platform lawfully and to provide information that is accurate to the best of your knowledge.",
   },
   {
     title: "2. Accounts",
-    content: "You must provide information that is true and current when you create an account. Keep your PIN and account information private. We may suspend an account where there is evidence of fraud, abuse or a serious breach of these terms."
+    content: "Keep your phone number and PIN secure. Do not use another person's account or provide false information. We may suspend an account when there is evidence of fraud, misuse or a serious breach of these terms.",
   },
   {
-    title: "3. Seller Listings",
-    content: "Sellers are responsible for the information in their listings. We review submitted listings for completeness and obvious issues, but our review is not a government certification and does not guarantee that a business is profitable or that every statement made by a seller is correct."
+    title: "3. Business listings",
+    content: "Sellers are responsible for the information, photos and documents they submit. Listings may be reviewed before publication. Sellers must update or remove information that is no longer accurate.",
   },
   {
-    title: "4. Verification",
-    content: "A verification or document-review label shows that the listed check has been completed. It does not replace the checks a buyer should make before purchasing a business."
+    title: "4. Confidential information",
+    content: "Some listing information is available only to approved buyers. A buyer who receives confidential information must keep it private and must not copy, publish or share it without permission.",
   },
   {
-    title: "5. Payments and Fees",
-    content: "Fees shown on the platform must be paid through the payment method provided. A payment does not by itself create a sale or transfer ownership of a business. Refunds are handled under our Refund Policy."
+    title: "5. Payments",
+    content: "Payments made through LATIELLE MARKET HUB are processed through the payment method shown at checkout. M-Pesa payments are confirmed after the payment provider returns the transaction result. Refunds are handled under the Refund Policy.",
   },
   {
-    title: "6. Confidential Information",
-    content: "Private business information is supplied for the buyer\'s evaluation of the listed business. You must not copy, publish or pass that information to another person without the seller\'s permission."
+    title: "6. Fraud and misuse",
+    content: "Do not submit false listings, impersonate another person, attempt to bypass platform controls or use the platform to defraud another user. Suspicious activity may be reported to us and may result in account restrictions.",
   },
   {
-    title: "7. Prohibited Conduct",
-    content: "Do not use the platform to impersonate another person, submit false documents, mislead another user, attempt to bypass payment or verification controls, or use the service for unlawful activity."
+    title: "7. Buying and selling",
+    content: "The final terms of a business sale are agreed between the buyer and seller. Users are responsible for reviewing the information available to them and completing any checks they consider necessary before entering a transaction.",
   },
   {
-    title: "8. Transactions Between Users",
-    content: "LATIELLE MARKET HUB provides the marketplace and communication tools. Buyers and sellers are responsible for their negotiations, agreements and decisions."
+    title: "8. Account deletion",
+    content: "To request deletion of your account and associated personal information, email realityofafrica2023@gmail.com from your registered contact details.",
   },
   {
-    title: "9. Account and Data Deletion",
-    content: "You may ask for your account to be deleted by contacting realityofafrica2023@gmail.com. Some records may need to be retained where required by law or for legitimate business records."
+    title: "9. Contact",
+    content: "Questions, complaints and reports can be sent to realityofafrica2023@gmail.com.",
   },
-  {
-    title: "10. Contact",
-    content: "For questions, complaints or reports of suspected fraud, contact realityofafrica2023@gmail.com. Please do not send your PIN or payment password by email."
-  }
 ];
 
 export default function Terms() {
   return (
     <div className="pt-20 pb-16 min-h-screen">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground mb-6 hover:text-foreground">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-body mb-6 hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />Back to Home
         </Link>
-        <h1 className="text-3xl sm:text-4xl font-bold mb-2">{"Terms & Conditions"}</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last updated: August 2026</p>
+        <h1 className="font-heading text-3xl font-bold mb-2">Terms & Conditions</h1>
+        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: August 2026</p>
         <div className="space-y-8">
-          {SECTIONS.map(section => (
-            <div key={section.title}>
-              <h2 className="text-xl font-semibold text-foreground mb-2">{section.title}</h2>
-              <p className="text-base text-muted-foreground leading-7">{section.content}</p>
-            </div>
+          {SECTIONS.map((section) => (
+            <section key={section.title}>
+              <h2 className="font-heading text-lg font-semibold text-foreground mb-2">{section.title}</h2>
+              <p className="text-sm text-muted-foreground font-body leading-relaxed">{section.content}</p>
+            </section>
           ))}
         </div>
       </div>

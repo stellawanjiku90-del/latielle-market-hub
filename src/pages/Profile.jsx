@@ -87,7 +87,7 @@ export default function Profile() {
   const subCounties = form.county ? getSubCountyNames(form.county) : [];
 
   return (
-    <div className="pt-20 pb-16 min-h-screen bg-slate-50">
+    <div className="pt-20 pb-16 min-h-screen bg-secondary/20">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="font-heading text-2xl font-bold mb-1">My Profile</h1>
         <p className="text-sm text-muted-foreground font-body mb-6">Manage your personal details and profile picture</p>

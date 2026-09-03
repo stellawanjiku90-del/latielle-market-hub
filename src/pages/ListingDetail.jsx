@@ -206,7 +206,7 @@ export default function ListingDetail() {
                 { icon: Users, label: "Employees", value: listing.employees || "—" },
                 { icon: TrendingUp, label: "Gross Sales", value: listing.monthly_gross_sales || "—" },
               ].map(item => (
-                <div key={item.label} className="bg-slate-50 rounded-lg p-3">
+                <div key={item.label} className="bg-secondary/50 rounded-lg p-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-body mb-1">
                     <item.icon className="h-3 w-3" />{item.label}
                   </div>
@@ -221,7 +221,7 @@ export default function ListingDetail() {
             </div>
 
             {(listing.monthly_gross_sales || listing.monthly_net_sales || listing.financial_records_available) && (
-              <div className="bg-muted rounded-xl p-5 border border-border/50">
+              <div className="bg-secondary/30 rounded-xl p-5 border border-border/50">
                 <h2 className="font-heading text-base font-semibold mb-3 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-primary" />Financial Overview
                 </h2>
@@ -261,7 +261,7 @@ export default function ListingDetail() {
             )}
 
             {/* Confidential Section */}
-            <div className="relative bg-muted rounded-xl p-6 border border-border/50">
+            <div className="relative bg-secondary/30 rounded-xl p-6 border border-border/50">
               <div className="absolute inset-0 bg-background/60 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center z-10">
                 <Lock className="h-8 w-8 text-primary mb-3" />
                 <p className="font-heading text-lg font-semibold text-foreground">Confidential Information</p>
@@ -305,7 +305,7 @@ export default function ListingDetail() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-3">
+                    <p className="text-xs text-muted-foreground bg-muted border border-border rounded-lg px-3 py-2 mt-3">
                       ⚠️ The seller retains the right to decline sharing any information at their discretion.
                     </p>
                     <div className="mt-3">

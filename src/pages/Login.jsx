@@ -101,6 +101,21 @@ export default function Login() {
     poll();
   };
 
+  const retryRegistrationPayment = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const data = await api.request("/api/auth/register-payment", { method: "POST", skipAuth: true, body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode }) });
+      setCheckoutRequestId(data.checkoutRequestId);
+      setStep("payment");
+      pollRegistration(data.checkoutRequestId);
+    } catch (err) {
+      setError(err.message || "Unable to start the M-Pesa payment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     setError("");
     if (!firstName.trim()) { setError("Please enter your first name."); return; }
@@ -349,12 +364,20 @@ export default function Login() {
                 An M-Pesa prompt for <span className="font-medium text-foreground">KSh 100</span> has been sent to<br />
                 <span className="font-medium text-foreground">{phone}</span>
               </p>
-              {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>}
-              <div className="rounded-xl border p-4 bg-primary/5 text-sm font-body space-y-2">
-                <p className="font-semibold">Complete the M-Pesa prompt on your phone.</p>
-                <p className="text-muted-foreground">Enter your M-Pesa PIN when prompted. We will activate your Latielle Market Hub account automatically after Safaricom confirms the KSh 100 payment.</p>
-              </div>
-              <div className="flex items-center justify-center gap-2 mt-6 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Waiting for payment confirmation...</div>
+              {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body leading-6">{error}</div>}
+              {!error ? (
+                <>
+                  <div className="rounded-xl border p-4 bg-primary/5 text-sm font-body space-y-2">
+                    <p className="font-semibold">Check your phone for the M-Pesa prompt.</p>
+                    <p className="text-muted-foreground">Keep the phone on and connected to the Safaricom network. Enter your M-Pesa PIN when the prompt appears.</p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 mt-6 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Waiting for payment confirmation...</div>
+                </>
+              ) : (
+                <Button className="w-full h-11 mt-2" onClick={retryRegistrationPayment} disabled={loading}>
+                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting M-Pesa...</> : "Try KSh 100 payment again"}
+                </Button>
+              )}
               <button onClick={() => { setStep("signup-pin"); setError(""); }} className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground font-body">← Back</button>
             </>
           )}

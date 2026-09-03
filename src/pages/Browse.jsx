@@ -167,7 +167,7 @@ export default function Browse() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="font-heading text-3xl font-bold text-foreground">Browse Businesses</h1>
-          <p className="text-muted-foreground font-body mt-1">Verified businesses available for sale across Kenya</p>
+          <p className="text-muted-foreground font-body mt-1">Established businesses available for sale across Kenya</p>
         </div>
 
         <div className="flex gap-3 mb-6">
@@ -223,7 +223,7 @@ export default function Browse() {
                     <button
                       onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                       disabled={currentPage === 1}
-                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-secondary/60 transition-colors"
                     >Previous</button>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                       <button
@@ -232,14 +232,14 @@ export default function Browse() {
                         className={`w-10 h-10 rounded-lg text-sm font-body font-medium transition-colors ${
                           page === currentPage
                             ? "bg-primary text-primary-foreground"
-                            : "border border-border hover:bg-muted"
+                            : "border border-border hover:bg-secondary/60"
                         }`}
                       >{page}</button>
                     ))}
                     <button
                       onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                       disabled={currentPage === totalPages}
-                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                      className="px-4 py-2 rounded-lg border border-border text-sm font-body font-medium disabled:opacity-40 hover:bg-secondary/60 transition-colors"
                     >Next</button>
                   </div>
                 )}

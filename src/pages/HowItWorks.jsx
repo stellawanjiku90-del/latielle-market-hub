@@ -3,17 +3,17 @@ import { Button } from "@/components/ui/button";
 import { ShieldCheck, Upload, Eye, CreditCard, MessageSquare, CheckCircle } from "lucide-react";
 
 const SELLER_STEPS = [
-  { icon: ShieldCheck, title: "Verify Your Identity", desc: "Provide the required ID and seller information. We review it before you can publish a listing." },
-  { icon: Upload, title: "Create a Listing", desc: "Enter the business details, add photos or video, and set your asking price." },
-  { icon: Eye, title: "Listing Reviewed", desc: "We check the listing and the documents you submit. Once approved, the listing is published." },
-  { icon: MessageSquare, title: "Connect with Buyers", desc: "Answer questions from buyers and decide when to share private business information." },
+  { icon: ShieldCheck, title: "Verify Your Identity", desc: "Upload your National ID, selfie, and optional business documents. Our team reviews your submission." },
+  { icon: Upload, title: "Create a Listing", desc: "Fill in business details, upload photos, and set your asking price. Listing your business is completely free." },
+  { icon: Eye, title: "Listing Reviewed", desc: "Our team reviews your listing for completeness and quality. Approved listings go live on the marketplace." },
+  { icon: MessageSquare, title: "Connect with Buyers", desc: "Receive detail requests from verified buyers. Approve requests to share confidential information and chat securely." },
 ];
 
 const BUYER_STEPS = [
-  { icon: ShieldCheck, title: "Create an Account", desc: "Create an account and verify your phone number. You can provide additional identification when requested." },
-  { icon: Eye, title: "Browse Businesses", desc: "Search by business type or location and review the public information on each listing." },
-  { icon: CreditCard, title: "Request Details", desc: "Request the private information available for a listing. The seller can review and approve the request." },
-  { icon: CheckCircle, title: "Get Approved", desc: "If your request is approved, you can view the information the seller has agreed to share." },
+  { icon: ShieldCheck, title: "Create an Account", desc: "Create an account with your phone number and 4-digit PIN." },
+  { icon: Eye, title: "Browse Businesses", desc: "Search established businesses across all 47 counties. View public details and photos." },
+  { icon: CreditCard, title: "Request Details", desc: "Submit a free request for confidential business information. Our team reviews each request before connecting you with the seller." },
+  { icon: CheckCircle, title: "Get Approved", desc: "Once the seller approves, access exact location, financial documents, supplier info, and seller contact." },
 ];
 
 export default function HowItWorks() {
@@ -22,7 +22,7 @@ export default function HowItWorks() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h1 className="font-heading text-3xl sm:text-4xl font-bold text-foreground">How Latielle Market Hub Works</h1>
-          <p className="mt-3 text-muted-foreground font-body max-w-xl mx-auto">How to list a business, find a business and contact a seller.</p>
+          <p className="mt-3 text-muted-foreground font-body max-w-xl mx-auto">A step-by-step guide to buying or selling a business safely on our platform.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
