@@ -244,7 +244,7 @@ export default function LocationPicker({ value, onChange }) {
                   <button
                     key={s.place_id}
                     type="button"
-                    className="w-full text-left px-4 py-2.5 text-sm font-body hover:bg-muted border-b border-border/40 last:border-0 flex items-start gap-2"
+                    className="w-full text-left px-4 py-2.5 text-sm font-body hover:bg-secondary/60 border-b border-border/40 last:border-0 flex items-start gap-2"
                     onClick={() => selectSuggestion(s)}
                   >
                     <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />

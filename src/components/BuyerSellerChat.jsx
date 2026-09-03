@@ -209,7 +209,7 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
                   {!isMe && <p className="text-[10px] text-muted-foreground px-1 font-body">{msg.sender_name || msg.sender_email}</p>}
                   <div className={cn(
                     "rounded-2xl px-3 py-2 text-sm font-body leading-relaxed transition-opacity space-y-2",
-                    isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted text-foreground rounded-tl-sm",
+                    isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-secondary text-foreground rounded-tl-sm",
                     msg._optimistic && "opacity-60"
                   )}>
                     {msg.content && <p className="whitespace-pre-line">{msg.content}</p>}
@@ -232,7 +232,7 @@ export default function BuyerSellerChat({ conversationId, currentUserEmail, curr
                     {isAdmin && !msg._optimistic && (
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => deleteMessage(msg)} className="text-[9px] text-destructive flex items-center gap-0.5 hover:underline"><Trash2 className="h-2.5 w-2.5" />Delete</button>
-                        <button onClick={() => warnUser(msg)} className="text-[9px] text-slate-600 flex items-center gap-0.5 hover:underline"><AlertTriangle className="h-2.5 w-2.5" />Warn</button>
+                        <button onClick={() => warnUser(msg)} className="text-[9px] text-destructive flex items-center gap-0.5 hover:underline"><AlertTriangle className="h-2.5 w-2.5" />Warn</button>
                       </div>
                     )}
                   </div>

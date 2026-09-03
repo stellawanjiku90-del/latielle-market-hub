@@ -1,219 +1,216 @@
-import { useState, useEffect, useRef } from "react";
-import { api, apiFunction } from "@/api/apiClient";
+import { useEffect, useRef, useState } from "react";
+import { api } from "@/api/apiClient";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, X, Send, Loader2, Bot, User, PhoneCall } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const SYSTEM_CONTEXT = `You provide customer support for LATIELLE MARKET HUB, a marketplace for businesses for sale in Kenya.
+const SUPPORT_EMAIL = "realityofafrica2023@gmail.com";
 
-You can help users with:
-- How to list a business for sale
-- How to browse and buy businesses
-- How payments work (M-Pesa, listing fees, detail request fees)
-- How verification works (seller verification, document review)
-- How the KES 1,000 confidential details request works
-- General questions about the platform
+const SUPPORT_INSTRUCTIONS = `You are the customer support assistant for LATIELLE MARKET HUB, a Kenyan marketplace for buying and selling established businesses across Kenya.
 
-Keep answers short, clear and practical. Do not invent policies, fees or promises. If a question needs a staff member, direct the user to realityofafrica2023@gmail.com.`;
+Answer questions about LATIELLE MARKET HUB using the facts below. Be direct, natural and useful. Do not use sales language, corporate buzzwords, emojis, fake testimonials, or vague claims. Do not invent fees, policies, listings, contact details, verification results, or business information. If the answer is not in the information provided, say that you do not have enough information and offer human support.
+
+Platform facts:
+- LATIELLE MARKET HUB helps people discover established businesses listed for sale across Kenya's 47 counties.
+- The platform currently presents 10,000+ established listed businesses and 1,000,000+ buyers as the platform figures supplied by the business.
+- Users can browse listings, search by business/category/location, view public listing information, and contact sellers through platform features where available.
+- Sellers can create listings and provide business information, photos and supporting documents.
+- Account registration uses a phone number and a 4-digit PIN. The current registration verification payment is KSh 100 through M-Pesa STK Push.
+- M-Pesa payments are confirmed by the platform after Safaricom returns the transaction result.
+- Buyers can request access to confidential business information where the listing and platform rules allow it.
+- Human support is available at ${SUPPORT_EMAIL}.
+
+If a customer asks for a human, tell them they can use the “Talk to a person” button in the chat. Do not send them away from the chat unless necessary.`;
+
+const initialMessage = {
+  role: "assistant",
+  content: "Hi. How can I help you with LATIELLE MARKET HUB?",
+};
 
 export default function HelpChatWidget() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hello. How can we help?\n\nYou can ask about listing a business, buying, payments or account verification." }
-  ]);
+  const [messages, setMessages] = useState([initialMessage]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [wantsHuman, setWantsHuman] = useState(false);
-  const [requestingHuman, setRequestingHuman] = useState(false);
-  const [humanRequested, setHumanRequested] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [humanFormOpen, setHumanFormOpen] = useState(false);
+  const [humanRequested, setHumanRequested] = useState(false);
+  const [requestingHuman, setRequestingHuman] = useState(false);
+  const [supportName, setSupportName] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
   const bottomRef = useRef(null);
 
   useEffect(() => {
     api.auth.isAuthenticated().then(async (authed) => {
-      if (authed) setCurrentUser(await api.auth.me());
+      if (!authed) return;
+      try {
+        const user = await api.auth.me();
+        setCurrentUser(user);
+        setSupportName(user?.full_name || user?.name || "");
+        setSupportEmail(user?.email || "");
+      } catch {
+        // Guest chat remains available even when authentication cannot be read.
+      }
     });
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || loading) return;
-    setInput("");
 
-    const newMessages = [...messages, { role: "user", content: text }];
-    setMessages(newMessages);
+    const history = [...messages, { role: "user", content: text }];
+    setMessages(history);
+    setInput("");
     setLoading(true);
 
-    // Check if user wants human support
-    const humanKeywords = ["human", "agent", "person", "talk to someone", "real person", "contact", "call me", "escalate"];
-    if (humanKeywords.some(k => text.toLowerCase().includes(k))) {
-      setWantsHuman(true);
-      setMessages([...newMessages, {
-        role: "assistant",
-        content: "I understand you'd like to speak with a human agent. 👤\n\nPlease email us at **realityofafrica2023@gmail.com** and our team will get back to you within 48 hours.\n\nIs there anything else I can help you with in the meantime?"
-      }]);
+    try {
+      const response = await api.integrations.Core.InvokeLLM({
+        instructions: SUPPORT_INSTRUCTIONS,
+        input: history.slice(-12).map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+      });
+
+      const answer = response?.answer || response?.output_text || "I couldn't answer that just now. You can use the Talk to a person option below.";
+      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `I can't reach the support service right now. You can use “Talk to a person” below or email ${SUPPORT_EMAIL}.`,
+        },
+      ]);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const openHumanForm = () => {
+    setSupportMessage((current) => current || [...messages].reverse().find((m) => m.role === "user")?.content || "");
+    setHumanFormOpen(true);
+  };
+
+  const requestHumanSupport = async () => {
+    const email = supportEmail.trim();
+    const name = supportName.trim();
+    const message = supportMessage.trim() || "I would like to speak with a member of the LATIELLE MARKET HUB team.";
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      toast.error("Enter a valid email address.");
       return;
     }
 
-    const conversationHistory = newMessages.map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
-
-    const response = await api.integrations.Core.InvokeLLM({
-      prompt: `${SYSTEM_CONTEXT}\n\nConversation so far:\n${conversationHistory}\n\nRespond helpfully and concisely as the support assistant.`,
-    });
-
-    setMessages([...newMessages, { role: "assistant", content: response }]);
-
-    // Save first user message as an AI chat support request
-    if (newMessages.filter(m => m.role === "user").length === 1 && currentUser?.email) {
-      api.asServiceRole.entities.SupportRequest.create({
-        user_email: currentUser.email,
-        user_name: currentUser.full_name || currentUser.email,
-        message: text,
-        type: "ai_chat",
-        status: "open",
-      }).catch(() => {});
-    }
-
-    setLoading(false);
-  };
-
-  const requestHumanChat = async () => {
-    if (humanRequested) return;
-    if (!currentUser) { api.auth.redirectToLogin(); return; }
     setRequestingHuman(true);
-
-    // Get the last user message as context
-    const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
-
     try {
-      // Save to SupportRequest entity for admin visibility
-      const conversationSummary = messages
-        .filter(m => m.role === "user")
-        .map(m => m.content)
-        .join(" | ");
-      await api.asServiceRole.entities.SupportRequest.create({
-        user_email: currentUser.email,
-        user_name: currentUser.full_name || currentUser.email,
-        message: lastUserMsg?.content || "User requested direct chat",
-        conversation_summary: conversationSummary,
-        type: "human_request",
-        status: "open",
-      });
-
-      // Create a support conversation so admin can reply directly
-      const conv = await api.entities.Conversation.create({
-        type: "support",
-        buyer_email: currentUser.email,
-        listing_title: "Support Chat Request",
-        status: "active",
-        last_message: lastUserMsg?.content || "User requested direct chat",
-        last_message_at: new Date().toISOString(),
-      });
-
-      // Send initial message into the conversation
-      await api.entities.ChatMessage.create({
-        conversation_id: conv.id,
-        sender_email: currentUser.email,
-        sender_name: currentUser.full_name || currentUser.email,
-        sender_role: "buyer",
-        content: lastUserMsg?.content || "Hi, I'd like to speak with the LATIELLE team directly.",
-        is_read: false,
-      });
-
-      // Notify admin via email
-      await apiFunction("notifyAdminSupportRequest", {
-        user_name: currentUser.full_name || "",
-        user_email: currentUser.email,
-        message: lastUserMsg?.content || "",
-        conversation_id: conv.id,
+      const response = await api.request("/api/support/human-request", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          email,
+          message,
+          conversation: messages,
+        }),
       });
 
       setHumanRequested(true);
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: `✅ Your chat request has been sent to the LATIELLE team!\n\nIf we're online, we'll join the chat shortly. If not, we'll reach out to you at **${currentUser.email}** as soon as possible.\n\nYou can also track your conversation in your Dashboard → Messages tab.`,
-      }]);
-      toast.success("Chat request sent to LATIELLE support!");
-    } catch (err) {
-      toast.error("Failed to send request. Please try again.");
+      setHumanFormOpen(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: response.emailSent
+            ? "Your request has been sent to the LATIELLE MARKET HUB team. We will contact you at the email address you provided."
+            : `Your request has been recorded. Please also email ${SUPPORT_EMAIL} because the notification service is temporarily unavailable.`,
+        },
+      ]);
+      toast.success("Support request sent");
+    } catch (error) {
+      toast.error(error.message || "We could not send the support request.");
     } finally {
       setRequestingHuman(false);
     }
   };
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  const handleKey = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
   };
 
   return (
     <>
-      {/* Floating button — above bottom nav, respects safe area */}
       <button
-        onClick={() => setOpen(o => !o)}
-        className="fixed right-4 z-[9999] h-14 w-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:bg-primary/90 transition-all hover:scale-105"
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="fixed right-4 z-[9999] h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
         style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))" }}
-        aria-label="Help Chat"
+        aria-label={open ? "Close support chat" : "Open support chat"}
       >
-        {open ? <X className="h-6 w-6 text-white" /> : <MessageCircle className="h-6 w-6 text-white" />}
+        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
       </button>
 
-      {/* Chat window */}
       {open && (
-        <div
-          className="fixed right-4 z-[9998] w-[calc(100vw-2rem)] sm:w-[380px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        <section
+          aria-label="LATIELLE MARKET HUB support chat"
+          className="fixed right-4 z-[9998] w-[calc(100vw-2rem)] sm:w-[390px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           style={{
             bottom: "calc(9.5rem + env(safe-area-inset-bottom, 0px))",
-            maxHeight: "min(520px, calc(100svh - 12rem))",
+            maxHeight: "min(600px, calc(100svh - 12rem))",
           }}
         >
-          {/* Header */}
-          <div className="bg-primary text-primary-foreground px-4 py-3 flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+          <header className="bg-primary text-primary-foreground px-4 py-3 flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-white/15 flex items-center justify-center">
               <Bot className="h-4 w-4" />
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold font-heading">LATIELLE Support</p>
-              <p className="text-[10px] opacity-80">Help chat · Usually instant</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">LATIELLE Support</p>
+              <p className="text-xs text-primary-foreground/80">Ask about the platform, listings or payments</p>
             </div>
-            <button onClick={() => setOpen(false)}><X className="h-4 w-4 opacity-70 hover:opacity-100" /></button>
-          </div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="p-1">
+              <X className="h-5 w-5" />
+            </button>
+          </header>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ minHeight: "280px", maxHeight: "340px" }}>
-            {messages.map((msg, i) => (
-              <div key={i} className={cn("flex gap-2", msg.role === "user" ? "justify-end" : "justify-start")}>
-                {msg.role === "assistant" && (
-                  <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="h-3 w-3 text-primary" />
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[250px] max-h-[360px]">
+            {messages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={cn("flex gap-2", message.role === "user" ? "justify-end" : "justify-start")}>
+                {message.role === "assistant" && (
+                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-3.5 w-3.5 text-primary" />
                   </div>
                 )}
-                <div className={cn(
-                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm font-body leading-relaxed whitespace-pre-line",
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-tr-sm"
-                    : "bg-muted text-foreground rounded-tl-sm"
-                )}>
-                  {msg.content}
+                <div
+                  className={cn(
+                    "max-w-[82%] rounded-2xl px-3 py-2.5 text-sm leading-6 whitespace-pre-line",
+                    message.role === "user"
+                      ? "bg-primary text-primary-foreground rounded-tr-sm"
+                      : "bg-muted text-foreground border border-border rounded-tl-sm"
+                  )}
+                >
+                  {message.content}
                 </div>
-                {msg.role === "user" && (
-                  <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="h-3 w-3 text-muted-foreground" />
+                {message.role === "user" && (
+                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
                 )}
               </div>
             ))}
             {loading && (
-              <div className="flex gap-2 justify-start">
-                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Bot className="h-3 w-3 text-primary" />
+              <div className="flex gap-2">
+                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Bot className="h-3.5 w-3.5 text-primary" />
                 </div>
-                <div className="bg-muted rounded-2xl rounded-tl-sm px-3 py-2">
+                <div className="bg-muted border border-border rounded-2xl px-3 py-2.5">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 </div>
               </div>
@@ -221,48 +218,49 @@ export default function HelpChatWidget() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Human chat request button */}
-          {!humanRequested && (
+          {!humanRequested && !humanFormOpen && (
             <div className="px-3 pb-2">
               <button
-                onClick={requestHumanChat}
-                disabled={requestingHuman}
-                className={cn(
-                  "w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-semibold py-2.5 transition-all",
-                  requestingHuman && "opacity-60 cursor-not-allowed"
-                )}
+                type="button"
+                onClick={openHumanForm}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary text-sm font-medium py-2.5 transition-colors"
               >
-                {requestingHuman ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <PhoneCall className="h-3.5 w-3.5" />
-                )}
-                {requestingHuman ? "Sending request…" : "Request LATIELLE to chat with me"}
+                <PhoneCall className="h-4 w-4" />
+                Talk to a person
               </button>
             </div>
           )}
-          {humanRequested && (
-            <div className="px-3 pb-2">
-              <div className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 text-primary text-xs font-medium py-2 opacity-70">
-                ✅ Chat request sent — we'll reach out soon!
+
+          {humanFormOpen && !humanRequested && (
+            <div className="border-t border-border p-3 space-y-2 bg-background">
+              <p className="text-sm font-medium">Contact LATIELLE support</p>
+              <input value={supportName} onChange={(e) => setSupportName(e.target.value)} placeholder="Your name" className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <input value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} placeholder="Email address" type="email" className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+              <textarea value={supportMessage} onChange={(e) => setSupportMessage(e.target.value)} placeholder="What do you need help with?" rows={3} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none resize-none focus:ring-2 focus:ring-ring" />
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setHumanFormOpen(false)}>Cancel</Button>
+                <Button type="button" className="flex-1" onClick={requestHumanSupport} disabled={requestingHuman}>
+                  {requestingHuman ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send request"}
+                </Button>
               </div>
             </div>
           )}
 
-          {/* Input */}
           <div className="border-t border-border p-3 flex gap-2">
             <input
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKey}
-              placeholder="Type your question..."
-              className="flex-1 text-sm font-body bg-background border border-input rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-ring"
+              placeholder="Ask a question"
+              disabled={loading}
+              className="flex-1 min-w-0 h-10 text-base bg-background border border-input rounded-lg px-3 outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+              aria-label="Chat message"
             />
-            <Button size="icon" onClick={sendMessage} disabled={loading || !input.trim()} className="shrink-0 h-9 w-9">
+            <Button type="button" size="icon" onClick={sendMessage} disabled={loading || !input.trim()} className="shrink-0 h-10 w-10" aria-label="Send message">
               <Send className="h-4 w-4" />
             </Button>
           </div>
-        </div>
+        </section>
       )}
     </>
   );

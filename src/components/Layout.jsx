@@ -8,7 +8,7 @@ export default function Layout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen flex flex-col font-body overflow-x-hidden">
+    <div className="min-h-screen flex flex-col font-body">
       <GlobalHeader />
       <main className="flex-1 page-transition" key={location.pathname}>
         <Outlet />
