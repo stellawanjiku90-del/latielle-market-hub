@@ -151,3 +151,23 @@
     transition: transform 0.08s ease, opacity 0.08s ease;
   }
 }
+/* Floating support chat: keep it clear of the mobile bottom navigation. */
+.help-chat-trigger {
+  bottom: 1.5rem;
+}
+
+.help-chat-panel {
+  bottom: 5.75rem;
+  max-height: min(640px, calc(100svh - 7.5rem));
+}
+
+@media (max-width: 767px) {
+  .help-chat-trigger {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .help-chat-panel {
+    bottom: calc(9.75rem + env(safe-area-inset-bottom, 0px));
+    max-height: min(640px, calc(100svh - 11.5rem));
+  }
+}
