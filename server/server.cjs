@@ -8,18 +8,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('./db.cjs');
 
-const ADMIN_PHONES = new Set(
-  (process.env.ADMIN_PHONES || '+254703927978,+254706692111')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-);
-
-function isAdminPhone(phone) {
-  return ADMIN_PHONES.has(normalizePhone(phone));
-}
-
-
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -31,6 +19,74 @@ if (!JWT_SECRET) {
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is required');
+}
+
+const SUPPORT_EMAIL = process.env.SUPPORT_NOTIFICATION_EMAIL || 'realityofafrica2023@gmail.com';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
+const aiRateWindow = new Map();
+
+function allowAiRequest(key) {
+  const now = Date.now();
+  const windowMs = 60_000;
+  const maxRequests = 12;
+  const recent = (aiRateWindow.get(key) || []).filter((time) => now - time < windowMs);
+  if (recent.length >= maxRequests) return false;
+  recent.push(now);
+  aiRateWindow.set(key, recent);
+  return true;
+}
+
+function mpesaResultMessage(code, description) {
+  switch (Number(code)) {
+    case 1037:
+      return 'M-Pesa could not reach the phone in time. Keep the phone on, connected to the Safaricom network and try the payment again.';
+    case 1032:
+      return 'The M-Pesa request was cancelled. Start the payment again if you still want to continue.';
+    case 2001:
+      return 'M-Pesa rejected the PIN entered on the phone. Start the payment again and enter the correct PIN.';
+    case 1:
+      return 'The M-Pesa account does not have enough balance to complete this payment.';
+    default:
+      return description || 'M-Pesa did not complete the payment. Please try again.';
+  }
+}
+
+async function sendSupportEmail({ name, email, message, conversation }) {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return false;
+  const transcript = Array.isArray(conversation)
+    ? conversation.slice(-20).map((item) => `${item.role === 'user' ? 'Customer' : 'LATIELLE Support'}: ${String(item.content || '').slice(0, 1200)}`).join('\n\n')
+    : '';
+  const body = [
+    'A customer has requested human support from LATIELLE MARKET HUB.',
+    '',
+    `Name: ${name || 'Not provided'}`,
+    `Email: ${email}`,
+    `Message: ${message}`,
+    '',
+    'Recent chat:',
+    transcript || 'No chat history provided.',
+  ].join('\n');
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: [SUPPORT_EMAIL],
+      reply_to: email,
+      subject: `LATIELLE support request from ${name || email}`,
+      text: body,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Support email failed: ${text.slice(0, 300)}`);
+  }
+  return true;
 }
 
 app.use(
@@ -58,42 +114,36 @@ function token(user) {
 }
 
 function auth(roles) {
-  return async (req, res, next) => {
+  return (req, res, next) => {
     const header = req.headers.authorization || '';
-    const tokenValue = header.startsWith('Bearer ') ? header.slice(7) : null;
+
+    const tokenValue = header.startsWith('Bearer ')
+      ? header.slice(7)
+      : null;
 
     if (!tokenValue) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return res.status(401).json({
+        error: 'Authentication required',
+      });
     }
 
     try {
-      const claims = jwt.verify(tokenValue, JWT_SECRET);
-      const result = await db.query(
-        `SELECT id, name, email, role, phone FROM users WHERE id=$1`,
-        [claims.id]
-      );
-      const user = result.rows[0];
-      if (!user) return res.status(401).json({ error: 'Account not found' });
+      req.user = jwt.verify(tokenValue, JWT_SECRET);
 
-      // Admin access is tied to the approved phone numbers, not to a client-side role.
-      // This also repairs an older account automatically if its database role was changed.
-      if (isAdminPhone(user.phone) && user.role !== 'admin') {
-        const updated = await db.query(
-          `UPDATE users SET role='admin' WHERE id=$1 RETURNING id, name, email, role, phone`,
-          [user.id]
-        );
-        if (updated.rows[0]) Object.assign(user, updated.rows[0]);
+      if (
+        roles &&
+        !roles.includes(req.user.role)
+      ) {
+        return res.status(403).json({
+          error: 'Forbidden',
+        });
       }
 
-      req.user = { ...claims, id: user.id, email: user.email, role: user.role, phone: user.phone };
-
-      if (roles && !roles.includes(req.user.role)) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
       next();
-    } catch (error) {
-      console.error('Authentication check failed', error.message);
-      return res.status(401).json({ error: 'Invalid or expired token' });
+    } catch {
+      return res.status(401).json({
+        error: 'Invalid or expired token',
+      });
     }
   };
 }
@@ -715,17 +765,13 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
   try {
     console.log('Public registration payment request received');
     const phone = normalizePhone(req.body.phone);
-    const requestedRole = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
-    const role = isAdminPhone(phone) ? 'admin' : requestedRole;
+    const role = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
     const pin = String(req.body.pin || '');
     if (!isKenyanPhone(phone)) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
 
-    const existing = await db.query('SELECT id, phone_verified, role FROM users WHERE phone=$1', [phone]);
+    const existing = await db.query('SELECT id, phone_verified FROM users WHERE phone=$1', [phone]);
     if (existing.rows[0]) {
-      if (isAdminPhone(phone) && existing.rows[0].role !== 'admin') {
-        await db.query(`UPDATE users SET role='admin' WHERE id=$1`, [existing.rows[0].id]);
-      }
       return res.status(409).json({ error: existing.rows[0].phone_verified ? 'This phone number is already registered. Sign in with your PIN.' : 'This phone number already has a registration in progress.' });
     }
 
@@ -799,11 +845,13 @@ app.get('/api/auth/registration-status/:checkoutRequestId', async (req, res, nex
       const u = (await db.query('SELECT * FROM users WHERE phone=$1', [pending.phone])).rows[0];
       if (u) return res.json({ success: true, status: 'paid', user: phoneUser(u), token: token({ id: u.id, email: u.email, role: u.role }) });
     }
+    const resultCode = pending.result_code ?? null;
     res.json({
       success: true,
       status: pending.status,
-      resultCode: pending.result_code ?? null,
-      reason: pending.result_description || null,
+      resultCode,
+      reason: pending.status === 'failed' ? mpesaResultMessage(resultCode, pending.result_description) : (pending.result_description || null),
+      retryAllowed: pending.status === 'failed',
     });
   } catch (e) { next(e); }
 });
@@ -839,23 +887,19 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
                 await client.query('BEGIN');
                 const existing = await client.query('SELECT * FROM users WHERE phone=$1 FOR UPDATE', [pending.phone]);
                 let u = existing.rows[0];
-                const assignedRole = isAdminPhone(pending.phone) ? 'admin' : pending.role;
                 if (!u) {
-                  u = (await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') RETURNING *`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), assignedRole, pending.phone, pending.pin_hash])).rows[0];
-                } else if (isAdminPhone(pending.phone) && u.role !== 'admin') {
-                  u = (await client.query(`UPDATE users SET role='admin' WHERE id=$1 RETURNING *`, [u.id])).rows[0];
+                  u = (await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') RETURNING *`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash])).rows[0];
                 }
                 await client.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, updated_at=NOW() WHERE id=$1`, [pending.id, receipt]);
                 await client.query('COMMIT');
               } catch (txError) { await client.query('ROLLBACK'); throw txError; } finally { client.release(); }
             } else {
               await db.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, receipt, resultDescription || 'Payment completed successfully']);
-              const assignedRole = isAdminPhone(pending.phone) ? 'admin' : pending.role;
-              await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO UPDATE SET role=CASE WHEN $3='admin' THEN 'admin' ELSE users.role END`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), assignedRole, pending.phone, pending.pin_hash]);
+              await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO NOTHING`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash]);
             }
           }
         } else {
-          await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, resultCode, resultDescription || 'M-Pesa did not complete the request.']);
+          await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, resultCode, mpesaResultMessage(resultCode, resultDescription)]);
         }
       }
     }
@@ -868,10 +912,6 @@ app.post('/api/auth/login-pin', async (req,res,next)=>{
     const phone=normalizePhone(req.body.phone), pin=String(req.body.pin||'');
     const r=await db.query(`SELECT * FROM users WHERE phone=$1`,[phone]); const u=r.rows[0];
     if(!u || !u.phone_verified || !u.pin_hash || !(await bcrypt.compare(pin,u.pin_hash))) return res.status(401).json({error:'Invalid phone number or PIN'});
-    if (isAdminPhone(phone) && u.role !== 'admin') {
-      const updated = await db.query(`UPDATE users SET role='admin' WHERE id=$1 RETURNING *`, [u.id]);
-      if (updated.rows[0]) Object.assign(u, updated.rows[0]);
-    }
     res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});
   }catch(e){next(e)}
 });
@@ -968,6 +1008,20 @@ app.post('/api/functions/:name', async(req,res,next)=>{
     const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:cfg.transactionType,Amount:Math.round(amount),PartyA:phone.slice(1),PartyB:cfg.partyB,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:String(p.detailRequestId||p.listingId||'LATIELLE'),TransactionDesc:String(p.listingTitle||'Latielle Market Hub payment').slice(0,13)})});
     const data=await response.json().catch(()=>({})); if(!response.ok||data.ResponseCode!=='0') return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'M-Pesa payment request failed'}); return res.json({success:true,checkoutRequestId:data.CheckoutRequestID,merchantRequestId:data.MerchantRequestID,message:'M-Pesa payment prompt sent'});
   }
+  if(n==='notifyAdminSupportRequest') {
+    try {
+      const emailSent = await sendSupportEmail({
+        name: p.user_name,
+        email: p.user_email,
+        message: p.message,
+        conversation: p.conversation,
+      });
+      return res.json({success:true, emailSent});
+    } catch (emailError) {
+      console.error(emailError);
+      return res.status(502).json({success:false, emailSent:false, error:'Support notification could not be sent.'});
+    }
+  }
   if(n==='createNotification'||n.startsWith('notify')) return res.json({success:true});
   if(n==='checkPaymentStatus') return res.json({success:true,status:'pending'});
   return res.status(404).json({error:`Unknown function: ${n}`});
@@ -975,93 +1029,82 @@ app.post('/api/functions/:name', async(req,res,next)=>{
 });
 
 /* =====================================================
-   FILES / EMAIL / PASSWORD RESET / AI FALLBACKS
+   SUPPORT / AI / EMAIL
 ===================================================== */
-function parseMultipartFile(req) {
-  return new Promise((resolve, reject) => {
-    const contentType = req.headers['content-type'] || '';
-    const match = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
-    if (!match) return reject(new Error('Invalid multipart upload.'));
-    const boundary = Buffer.from(`--${match[1] || match[2]}`);
-    const chunks = [];
-    let size = 0;
-    const maxBytes = 50 * 1024 * 1024;
-    req.on('data', (chunk) => {
-      size += chunk.length;
-      if (size > maxBytes + 1024 * 1024) {
-        reject(new Error('File is larger than the 50 MB upload limit.'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('error', reject);
-    req.on('end', () => {
-      try {
-        const body = Buffer.concat(chunks);
-        const start = body.indexOf(Buffer.from('\r\n\r\n'));
-        if (start < 0) throw new Error('Could not read the uploaded file.');
-        const headerText = body.slice(0, start).toString('utf8');
-        const disposition = headerText.match(/filename="([^"]*)"/i);
-        const typeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i);
-        if (!disposition) throw new Error('No file was included in the upload.');
-        const filename = path.basename(disposition[1] || 'upload');
-        const contentTypeValue = (typeMatch?.[1] || 'application/octet-stream').trim();
-        const fileStart = start + 4;
-        const endMarker = Buffer.concat([Buffer.from('\r\n'), boundary]);
-        const fileEnd = body.indexOf(endMarker, fileStart);
-        if (fileEnd < 0) throw new Error('The upload was incomplete.');
-        const buffer = body.slice(fileStart, fileEnd);
-        if (!buffer.length) throw new Error('The uploaded file is empty.');
-        resolve({ filename, contentType: contentTypeValue, buffer });
-      } catch (error) { reject(error); }
-    });
-  });
-}
-
-function cloudinarySignature(params, secret) {
-  const payload = Object.keys(params).sort().map((key) => `${key}=${params[key]}`).join('&');
-  return crypto.createHash('sha1').update(payload + secret).digest('hex');
-}
-
-app.post('/api/upload', auth(), async (req, res, next) => {
+app.post('/api/support/human-request', optionalAuth, async (req, res, next) => {
   try {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    if (!cloudName || !apiKey || !apiSecret) {
-      return res.status(503).json({ error: 'File storage is not configured. Add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in Render.' });
+    const name = String(req.body?.name || req.user?.name || '').trim().slice(0, 120);
+    const email = String(req.body?.email || req.user?.email || '').trim().toLowerCase();
+    const message = String(req.body?.message || '').trim().slice(0, 4000);
+    const conversation = Array.isArray(req.body?.conversation) ? req.body.conversation.slice(-20) : [];
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({error:'Enter a valid email address.'});
+    if (!message) return res.status(400).json({error:'Tell us briefly what you need help with.'});
+
+    const record = {
+      user_email: email,
+      user_name: name || email,
+      message,
+      conversation_summary: conversation.map((item) => `${item.role}: ${String(item.content || '')}`).join('\n').slice(0, 12000),
+      type: 'human_request',
+      status: 'open',
+    };
+    const saved = await db.query('INSERT INTO entity_records(entity_name,data) VALUES($1,$2) RETURNING id,created_at', ['SupportRequest', JSON.stringify(record)]);
+
+    let emailSent = false;
+    try {
+      emailSent = await sendSupportEmail({ name, email, message, conversation });
+    } catch (emailError) {
+      console.error('Support notification failed', emailError);
     }
 
-    const file = await parseMultipartFile(req);
-    const resourceType = file.contentType.startsWith('video/') ? 'video'
-      : file.contentType.startsWith('image/') ? 'image' : 'raw';
-    const timestamp = Math.floor(Date.now() / 1000);
-    const folder = `latielle-market-hub/${req.user.id}`;
-    const signature = cloudinarySignature({ folder, timestamp }, apiSecret);
-    const form = new FormData();
-    form.append('file', new Blob([file.buffer], { type: file.contentType }), file.filename);
-    form.append('api_key', apiKey);
-    form.append('timestamp', String(timestamp));
-    form.append('folder', folder);
-    form.append('signature', signature);
-
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
-      method: 'POST',
-      body: form,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.secure_url) {
-      console.error('Cloudinary upload failed', { status: response.status, error: data.error?.message || data });
-      return res.status(502).json({ error: data.error?.message || 'File upload failed. Please try again.' });
-    }
-    res.json({ file_url: data.secure_url, public_id: data.public_id, resource_type: data.resource_type });
+    res.json({ success:true, requestId:saved.rows[0]?.id, emailSent });
   } catch (error) {
     next(error);
   }
 });
-app.post('/api/email', auth(), (req,res)=>res.json({success:true,queued:false,message:'Email provider not configured'}));
-app.post('/api/ai', auth(), (req,res)=>res.json({success:true,answer:'AI support is not configured on this deployment yet.'}));
+
+app.post('/api/email', auth(), async (req,res,next)=>{
+  try {
+    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return res.status(503).json({success:false,error:'Email service is not configured.'});
+    const payload = req.body || {};
+    const response = await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},
+      body:JSON.stringify({from:payload.from || process.env.RESEND_FROM_EMAIL,to:payload.to,subject:payload.subject || 'LATIELLE MARKET HUB',text:payload.body || ''}),
+    });
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) return res.status(502).json({success:false,error:data.message || 'Email service rejected the message.'});
+    res.json({success:true,queued:true,id:data.id || null});
+  }catch(e){next(e)}
+});
+
+app.post('/api/ai', optionalAuth, async (req,res,next)=>{
+  try {
+    const key = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    if (!allowAiRequest(String(key))) return res.status(429).json({error:'Too many chat requests. Please wait a moment and try again.'});
+    if (!process.env.OPENAI_API_KEY) return res.status(503).json({error:'LATIELLE support is temporarily unavailable.'});
+
+    const instructions = String(req.body?.instructions || '').slice(0, 12000);
+    const input = Array.isArray(req.body?.input)
+      ? req.body.input.slice(-12).map((item) => ({ role:item.role === 'assistant' ? 'assistant' : 'user', content:String(item.content || '').slice(0, 3000) }))
+      : String(req.body?.prompt || '').slice(0, 10000);
+
+    const response = await fetch('https://api.openai.com/v1/responses',{
+      method:'POST',
+      headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
+      body:JSON.stringify({model:OPENAI_MODEL,instructions,input,store:false,max_output_tokens:700}),
+    });
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) {
+      console.error('OpenAI request failed', {status:response.status,error:data?.error?.message});
+      return res.status(502).json({error:'LATIELLE support is temporarily unavailable.'});
+    }
+    const answer = data.output_text || data.output?.flatMap((item)=>item.content||[]).filter((item)=>item.type==='output_text').map((item)=>item.text).join('\n') || '';
+    if(!answer) return res.status(502).json({error:'LATIELLE support did not return an answer.'});
+    res.json({success:true,answer});
+  }catch(e){next(e)}
+});
 app.post('/api/auth/forgot-password', async (_req,res)=>res.json({success:true,message:'Password reset is not used for phone/PIN accounts.'}));
 app.post('/api/auth/reset-password', async (_req,res)=>res.status(400).json({error:'Password reset is not available for phone/PIN accounts.'}));
 
