@@ -70,7 +70,7 @@ export default function GlobalHeader() {
               <Link
                 key={link.path}
                 to={link.path}
-                className={`text-sm font-body font-medium transition-colors select-none ${location.pathname === link.path ? "text-white font-semibold" : "text-white/70 hover:text-white"}`}
+                className={`text-sm font-body font-medium transition-colors select-none ${location.pathname === link.path ? "text-white font-semibold" : "text-white/90 hover:text-white"}`}
               >
                 {link.label}
               </Link>
@@ -83,7 +83,7 @@ export default function GlobalHeader() {
               {user ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2 font-body select-none border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white">
+                    <Button variant="outline" size="sm" className="gap-2 font-body select-none border-white/50 bg-transparent text-white hover:bg-white/10 hover:text-white">
                       <User className="h-4 w-4" />
                       {user.full_name || user.name || "Account"}
                     </Button>
