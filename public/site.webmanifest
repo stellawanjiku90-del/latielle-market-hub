@@ -1,1 +1,9 @@
-{"name":"Latielle Market Hub","short_name":"Latielle","start_url":"/","display":"standalone"}
+{
+  "name": "Latielle Market Hub",
+  "short_name": "Latielle",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#198754",
+  "description": "Buy and sell established businesses across Kenya."
+}
