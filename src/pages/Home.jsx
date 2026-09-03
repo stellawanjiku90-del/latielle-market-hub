@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/api/apiClient";
-import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Star, LogIn, UserPlus, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Star, ShieldCheck } from "lucide-react";
 import HeroSection from "../components/HeroSection";
 import TrustSection from "../components/TrustSection";
 import ListingCard from "../components/ListingCard";
@@ -17,7 +16,6 @@ const TESTIMONIALS = [
 export default function Home() {
   const [featured, setFeatured] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [user] = useState(() => getSession());
 
   useEffect(() => {
     api.entities.BusinessListing.filter({ status: "approved" }, "-created_date", 6)
@@ -29,45 +27,6 @@ export default function Home() {
   return (
     <div className="bg-background">
       <HeroSection />
-
-      {!user && (
-        <section className="py-8 sm:py-10 bg-card border-b border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-border bg-secondary/35 p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <div>
-                <p className="text-sm font-semibold text-primary">New to the marketplace?</p>
-                <h2 className="mt-1 font-heading text-xl sm:text-2xl font-bold tracking-tight text-foreground">Create an account when you are ready to take the next step.</h2>
-                <p className="mt-2 text-sm text-muted-foreground">Use your phone to create an account, browse listings and manage your activity.</p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-                <Link to="/login">
-                  <Button className="w-full sm:w-auto h-11 px-6">
-                    <UserPlus className="mr-2 h-4 w-4" /> Create an account
-                  </Button>
-                </Link>
-                <Link to="/login">
-                  <Button variant="outline" className="w-full sm:w-auto h-11 px-6 bg-card">
-                    <LogIn className="mr-2 h-4 w-4" /> Sign in
-                  </Button>
-                </Link>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap gap-x-7 gap-y-2 text-sm text-muted-foreground">
-              {[
-                "Verified seller badges",
-                "Private business details",
-                "M-Pesa payments",
-                "In-app conversations",
-              ].map((item) => (
-                <span key={item} className="inline-flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       <section className="py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
