@@ -7,7 +7,6 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import OfflineGate from '@/components/OfflineGate';
 import { AuthProvider } from '@/lib/AuthContext';
 import Layout from './components/Layout.jsx';
-import ScrollToTop from '@/components/ScrollToTop';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -69,7 +68,6 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <ScrollToTop />
           <OfflineGate>
             <AuthenticatedApp />
           </OfflineGate>
