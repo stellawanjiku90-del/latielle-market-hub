@@ -173,6 +173,56 @@ function optionalAuth(req, _res, next) {
   next();
 }
 
+const UPLOAD_LIMIT_BYTES = 50 * 1024 * 1024;
+const ALLOWED_UPLOAD_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'application/pdf',
+]);
+
+app.post('/api/upload', auth(), express.raw({ type: () => true, limit: UPLOAD_LIMIT_BYTES }), async (req, res, next) => {
+  try {
+    const mimeType = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
+    if (!ALLOWED_UPLOAD_TYPES.has(mimeType)) {
+      return res.status(415).json({ error: 'This file type is not supported. Use JPG, PNG, WEBP, GIF, MP4, WEBM, MOV or PDF.' });
+    }
+    const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!fileBuffer.length) return res.status(400).json({ error: 'The selected file is empty.' });
+    if (fileBuffer.length > UPLOAD_LIMIT_BYTES) return res.status(413).json({ error: 'That file is too large. The maximum file size is 50 MB.' });
+
+    let filename = decodeURIComponent(String(req.headers['x-file-name'] || 'upload')).replace(/[\\/\0]/g, '').trim();
+    if (!filename) filename = 'upload';
+    filename = filename.slice(0, 180);
+    const kind = String(req.headers['x-upload-kind'] || 'document').toLowerCase();
+    const isPrivate = kind === 'document';
+
+    const result = await db.query(
+      `INSERT INTO uploads(owner_id,filename,mime_type,file_size,is_private,data) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.user.id, filename, mimeType, fileBuffer.length, isPrivate, fileBuffer]
+    );
+    const id = result.rows[0].id;
+    res.status(201).json({ success: true, file_url: `/api/uploads/${id}`, id, filename, mime_type: mimeType, size: fileBuffer.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/uploads/:id', optionalAuth, async (req, res, next) => {
+  try {
+    const result = await db.query('SELECT owner_id,is_private,mime_type,filename,file_size,data FROM uploads WHERE id=$1', [req.params.id]);
+    const file = result.rows[0];
+    if (!file) return res.status(404).send('File not found');
+    if (file.is_private && (!req.user || req.user.id !== file.owner_id)) return res.status(403).send('File is private');
+    res.setHeader('Content-Type', file.mime_type);
+    res.setHeader('Content-Length', String(file.file_size));
+    res.setHeader('Content-Disposition', `inline; filename="${String(file.filename).replace(/"/g, '')}"`);
+    res.setHeader('Cache-Control', file.is_private ? 'private, max-age=300' : 'public, max-age=31536000, immutable');
+    res.send(file.data);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /* =====================================================
    HEALTH CHECK
 ===================================================== */
