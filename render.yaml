@@ -11,14 +11,6 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
-      - key: ADMIN_PHONES
-        value: +254703927978,+254706692111
       - key: MPESA_SHORTCODE
         sync: false
       - key: MPESA_PASSKEY
@@ -32,4 +24,14 @@ services:
       - key: MPESA_ENV
         value: production
       - key: MPESA_TRANSACTION_TYPE
-        value: CustomerBuyGoodsOnline
+        value: CustomerPayBillOnline
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: SUPPORT_NOTIFICATION_EMAIL
+        value: realityofafrica2023@gmail.com
