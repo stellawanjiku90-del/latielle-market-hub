@@ -85,9 +85,13 @@ export const api = {
   },
   integrations: {
     Core: {
-      async UploadFile({ file }) {
-        const fd = new FormData(); fd.append("file", file);
-        return request("/api/upload", { method: "POST", body: fd });
+      async UploadFile({ file, kind = "document" }) {
+        const headers = {
+          "Content-Type": file.type || "application/octet-stream",
+          "X-File-Name": encodeURIComponent(file.name || "upload"),
+          "X-Upload-Kind": kind,
+        };
+        return request("/api/upload", { method: "POST", body: file, headers });
       },
       InvokeLLM({ prompt, ...rest }) { return request("/api/ai", { method: "POST", body: JSON.stringify({ prompt, ...rest }) }); },
       SendEmail(payload) { return request("/api/email", { method: "POST", body: JSON.stringify(payload) }); },
