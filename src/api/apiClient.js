@@ -8,9 +8,21 @@ export async function request(path, options = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(fetchOptions.headers || {}),
   };
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...fetchOptions, headers });
+  } catch (networkError) {
+    if (fetchOptions.method === undefined && path.startsWith("/api/entities/BusinessListing")) {
+      const cached = localStorage.getItem(`latielle_cache:${path}`);
+      if (cached) return JSON.parse(cached);
+    }
+    throw networkError;
+  }
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
+  if (response.ok && fetchOptions.method === undefined && path.startsWith("/api/entities/BusinessListing")) {
+    try { localStorage.setItem(`latielle_cache:${path}`, JSON.stringify(data)); } catch {}
+  }
   if (!response.ok) {
     const message = (data && typeof data === "object" ? (data.error || data.message) : "") ||
       (typeof data === "string" && data.trim() ? data.trim().slice(0, 300) : "") ||
