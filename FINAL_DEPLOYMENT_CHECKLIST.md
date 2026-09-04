@@ -17,7 +17,7 @@ Start command:
 - `MPESA_CONSUMER_SECRET`
 - `MPESA_CALLBACK_URL`
 - `MPESA_ENV=production`
-- `MPESA_TRANSACTION_TYPE=CustomerPayBillOnline`
+- `MPESA_TRANSACTION_TYPE=CustomerBuyGoodsOnline`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL=gpt-5.6-luna`
 - `RESEND_API_KEY`
