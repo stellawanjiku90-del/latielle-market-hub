@@ -171,3 +171,5 @@
     max-height: min(640px, calc(100svh - 11.5rem));
   }
 }
+
+.font-heading { letter-spacing: -0.018em; }
