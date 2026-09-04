@@ -22,6 +22,8 @@ export function saveSession(user) {
 
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user');
 }
 
 export function saveReturnUrl(url) {
