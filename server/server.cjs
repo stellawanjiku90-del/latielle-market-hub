@@ -10,6 +10,19 @@ const db = require('./db.cjs');
 
 const app = express();
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+// Baseline browser security headers. Keep the policy compatible with the marketplace UI.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' https:; frame-src 'self' blob:;");
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
 
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -24,8 +37,10 @@ if (!process.env.DATABASE_URL) {
 
 const SUPPORT_EMAIL = process.env.SUPPORT_NOTIFICATION_EMAIL || 'realityofafrica2023@gmail.com';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
+const OPENAI_FALLBACK_MODEL = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini';
 const aiRateWindow = new Map();
 const OPENAI_TIMEOUT_MS = 25_000;
+const DETAIL_REQUEST_FEE = 1000;
 
 const OPENAI_INSTRUCTIONS = `You are the customer support assistant for LATIELLE MARKET HUB, a Kenyan marketplace for buying and selling established businesses across Kenya.
 
@@ -53,6 +68,32 @@ function allowAiRequest(key) {
   aiRateWindow.set(key, recent);
   return true;
 }
+
+function createRateLimiter({ windowMs, max, keyFn = (req) => req.ip || 'unknown' }) {
+  const buckets = new Map();
+  return (req, res, next) => {
+    const key = String(keyFn(req));
+    const now = Date.now();
+    const recent = (buckets.get(key) || []).filter((time) => now - time < windowMs);
+    if (recent.length >= max) {
+      res.setHeader('Retry-After', String(Math.ceil(windowMs / 1000)));
+      return res.status(429).json({ error: 'Too many attempts. Please wait a moment and try again.' });
+    }
+    recent.push(now);
+    buckets.set(key, recent);
+    // Prevent unbounded memory growth.
+    if (buckets.size > 5000) {
+      for (const [bucketKey, times] of buckets) {
+        if (!times.some((time) => now - time < windowMs)) buckets.delete(bucketKey);
+      }
+    }
+    next();
+  };
+}
+
+const sensitiveRateLimit = createRateLimiter({ windowMs: 60_000, max: 10 });
+const uploadRateLimit = createRateLimiter({ windowMs: 60_000, max: 30 });
+const viewRateLimit = createRateLimiter({ windowMs: 60_000, max: 60, keyFn: (req) => `${req.ip}:${req.params.id}` });
 
 function mpesaResultMessage(code, description) {
   switch (Number(code)) {
@@ -107,13 +148,17 @@ async function sendSupportEmail({ name, email, message, conversation }) {
   return true;
 }
 
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL
-      ? process.env.CLIENT_URL.split(',')
-      : true,
-  })
-);
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:4173')
+  .split(',').map((value) => value.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin not allowed'));
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-File-Name', 'X-Upload-Kind'],
+  maxAge: 600,
+}));
 
 app.use(express.json({ limit: '2mb' }));
 
@@ -180,7 +225,7 @@ const ALLOWED_UPLOAD_TYPES = new Set([
   'application/pdf',
 ]);
 
-app.post('/api/upload', auth(), express.raw({ type: () => true, limit: UPLOAD_LIMIT_BYTES }), async (req, res, next) => {
+app.post('/api/upload', auth(), uploadRateLimit, express.raw({ type: () => true, limit: UPLOAD_LIMIT_BYTES }), async (req, res, next) => {
   try {
     const mimeType = String(req.headers['content-type'] || '').split(';')[0].toLowerCase();
     if (!ALLOWED_UPLOAD_TYPES.has(mimeType)) {
@@ -188,13 +233,27 @@ app.post('/api/upload', auth(), express.raw({ type: () => true, limit: UPLOAD_LI
     }
     const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     if (!fileBuffer.length) return res.status(400).json({ error: 'The selected file is empty.' });
-    if (fileBuffer.length > UPLOAD_LIMIT_BYTES) return res.status(413).json({ error: 'That file is too large. The maximum file size is 50 MB.' });
+    const kind = String(req.headers['x-upload-kind'] || 'document').toLowerCase();
+    const maxForKind = kind === 'video' ? UPLOAD_LIMIT_BYTES : 10 * 1024 * 1024;
+    if (fileBuffer.length > maxForKind) return res.status(413).json({ error: kind === 'video' ? 'That video is too large. The maximum is 50 MB.' : 'That file is too large. The maximum is 10 MB.' });
+
+    const signatureOk = (mime, buf) => {
+      if (mime === 'image/jpeg') return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+      if (mime === 'image/png') return buf.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+      if (mime === 'image/gif') return buf.subarray(0, 6).toString() === 'GIF87a' || buf.subarray(0, 6).toString() === 'GIF89a';
+      if (mime === 'image/webp') return buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP';
+      if (mime === 'application/pdf') return buf.subarray(0, 5).toString() === '%PDF-';
+      if (mime === 'video/webm') return buf.subarray(0, 4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]));
+      if (mime === 'video/mp4' || mime === 'video/quicktime') return buf.length >= 12 && buf.subarray(4, 8).toString() === 'ftyp';
+      return false;
+    };
+    if (!signatureOk(mimeType, fileBuffer)) return res.status(415).json({ error: 'The file contents do not match the selected file type.' });
 
     let filename = decodeURIComponent(String(req.headers['x-file-name'] || 'upload')).replace(/[\\/\0]/g, '').trim();
     if (!filename) filename = 'upload';
     filename = filename.slice(0, 180);
-    const kind = String(req.headers['x-upload-kind'] || 'document').toLowerCase();
     const isPrivate = kind === 'document';
+    if (!['photo', 'video', 'document'].includes(kind)) return res.status(400).json({ error: 'Invalid upload type.' });
 
     const result = await db.query(
       `INSERT INTO uploads(owner_id,filename,mime_type,file_size,is_private,data) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
@@ -212,7 +271,15 @@ app.get('/api/uploads/:id', optionalAuth, async (req, res, next) => {
     const result = await db.query('SELECT owner_id,is_private,mime_type,filename,file_size,data FROM uploads WHERE id=$1', [req.params.id]);
     const file = result.rows[0];
     if (!file) return res.status(404).send('File not found');
-    if (file.is_private && (!req.user || req.user.id !== file.owner_id)) return res.status(403).send('File is private');
+    if (file.is_private) {
+      let allowed = Boolean(req.user && (req.user.id === file.owner_id || req.user.role === 'admin'));
+      if (!allowed && req.user) {
+        const marker = `/api/uploads/${req.params.id}`;
+        const access = await db.query(`SELECT 1 FROM detail_requests dr JOIN listings l ON l.id=dr.listing_id WHERE dr.buyer_id=$1 AND dr.status IN ('approved','responded') AND l.metadata::text LIKE $2 LIMIT 1`,[req.user.id,`%${marker}%`]);
+        allowed = Boolean(access.rows[0]);
+      }
+      if (!allowed) return res.status(403).send('File is private');
+    }
     res.setHeader('Content-Type', file.mime_type);
     res.setHeader('Content-Length', String(file.file_size));
     res.setHeader('Content-Disposition', `inline; filename="${String(file.filename).replace(/"/g, '')}"`);
@@ -241,7 +308,7 @@ app.get('/api/health', async (_req, res) => {
     res.status(503).json({
       ok: false,
       database: false,
-      error: error.message,
+      error: process.env.NODE_ENV === 'production' ? 'Service unavailable' : error.message,
     });
   }
 });
@@ -389,6 +456,14 @@ app.get('/api/me', auth(), async (req, res, next) => {
    LISTINGS
 ===================================================== */
 
+app.post('/api/listings/:id/view', optionalAuth, viewRateLimit, async (req,res,next)=>{
+  try {
+    const result=await db.query(`UPDATE listings SET metadata=jsonb_set(metadata,'{views_count}',to_jsonb(COALESCE((metadata->>'views_count')::integer,0)+1),true) WHERE id=$1 AND status IN ('approved','active') RETURNING metadata->>'views_count' AS views_count`,[req.params.id]);
+    if(!result.rows[0]) return res.status(404).json({error:'Listing not found'});
+    res.json({success:true,views_count:Number(result.rows[0].views_count||0)});
+  } catch(e){next(e)}
+});
+
 app.get('/api/listings', async (req, res, next) => {
   try {
     const result = await db.query(
@@ -399,10 +474,7 @@ app.get('/api/listings', async (req, res, next) => {
       FROM listings l
       JOIN users u
         ON u.id = l.seller_id
-      WHERE (
-        $1::text IS NULL
-        OR l.status = $1
-      )
+      WHERE ($1::text IS NULL OR l.status = $1 OR ($1 = 'active' AND l.status = 'approved'))
       ORDER BY l.created_at DESC
       `,
       [
@@ -410,7 +482,7 @@ app.get('/api/listings', async (req, res, next) => {
       ]
     );
 
-    res.json(result.rows);
+    res.json(result.rows.map((row) => publicEntity('BusinessListing', row, { includePrivate: false })));
   } catch (error) {
     next(error);
   }
@@ -431,13 +503,11 @@ app.get('/api/listings/:id', async (req, res, next) => {
       [req.params.id]
     );
 
-    if (!result.rows[0]) {
-      return res.status(404).json({
-        error: 'Listing not found',
-      });
+    if (!result.rows[0] || !['approved','active'].includes(result.rows[0].status)) {
+      return res.status(404).json({ error: 'Listing not found' });
     }
 
-    res.json(result.rows[0]);
+    res.json(publicEntity('BusinessListing', result.rows[0], { includePrivate: false }));
   } catch (error) {
     next(error);
   }
@@ -448,41 +518,15 @@ app.post(
   auth(['seller', 'admin']),
   async (req, res, next) => {
     try {
-      const {
-        title,
-        description = '',
-        price,
-      } = req.body;
-
-      if (!title || price === undefined) {
-        return res.status(400).json({
-          error: 'Title and price are required',
-        });
-      }
-
-      const result = await db.query(
-        `
-        INSERT INTO listings (
-          seller_id,
-          title,
-          description,
-          price
-        )
-        VALUES ($1, $2, $3, $4)
-        RETURNING *
-        `,
-        [
-          req.user.id,
-          title,
-          description,
-          price,
-        ]
-      );
-
-      res.status(201).json(result.rows[0]);
-    } catch (error) {
-      next(error);
-    }
+      const d=req.body||{};
+      if (!d.title || !d.description || !d.price || !d.category || !d.county || !d.town) return res.status(400).json({error:'Required listing information is missing.'});
+      if (!Array.isArray(d.photos) || !d.photos.length) return res.status(400).json({error:'At least one business photo is required.'});
+      if (!Array.isArray(d.videos) || !d.videos.length) return res.status(400).json({error:'A business video is required.'});
+      for (const field of ['business_licence','registration_cert','owner_id_docs']) if(!Array.isArray(d[field]) || !d[field].length) return res.status(400).json({error:'All confidential verification documents are required.'});
+      const metadata={...d}; for(const k of ['title','description','price','status']) delete metadata[k];
+      const result=await db.query(`INSERT INTO listings(seller_id,title,description,price,status,metadata,payment_status) VALUES($1,$2,$3,$4,'pending',$5,'unpaid') RETURNING *`,[req.user.id,d.title,String(d.description).slice(0,12000),Number(d.price),JSON.stringify(metadata)]);
+      res.status(201).json(publicEntity('BusinessListing',result.rows[0],{includePrivate:true}));
+    } catch (error) { next(error); }
   }
 );
 
@@ -515,32 +559,11 @@ app.patch(
         });
       }
 
-      const {
-        title,
-        description,
-        price,
-        status,
-      } = req.body;
-
+      const { title, description, price, status } = req.body;
+      if (req.user.role !== 'admin' && status !== undefined) return res.status(403).json({error:'Only the admin team can change listing approval status.'});
       const result = await db.query(
-        `
-        UPDATE listings
-        SET
-          title = COALESCE($2, title),
-          description = COALESCE($3, description),
-          price = COALESCE($4, price),
-          status = COALESCE($5, status),
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-        `,
-        [
-          req.params.id,
-          title,
-          description,
-          price,
-          status,
-        ]
+        `UPDATE listings SET title=COALESCE($2,title),description=COALESCE($3,description),price=COALESCE($4,price),status=COALESCE($5,status),updated_at=NOW() WHERE id=$1 RETURNING *`,
+        [req.params.id,title,description,price,status]
       );
 
       res.json(result.rows[0]);
@@ -818,6 +841,7 @@ function phoneUser(row) {
     id: row.id,
     phone_number: row.phone,
     full_name: row.name || '',
+    email: row.email || '',
     role: row.role,
     is_verified: row.phone_verified,
     has_pin: row.has_pin,
@@ -828,15 +852,17 @@ function phoneUser(row) {
     profile_picture: row.profile_picture,
     favorites: row.favorites || [],
     verification_status: row.verification_status || 'unverified',
+    name_locked: Boolean(row.name_locked),
   };
 }
 
-app.post('/api/auth/register-payment', async (req, res, next) => {
+app.post('/api/auth/register-payment', sensitiveRateLimit, async (req, res, next) => {
   try {
     console.log('Public registration payment request received');
     const phone = normalizePhone(req.body.phone);
     const role = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
     const pin = String(req.body.pin || '');
+    const name = String(req.body.name || '').trim().replace(/\s+/g, ' ').slice(0, 120);
     if (!isKenyanPhone(phone)) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
 
@@ -847,10 +873,10 @@ app.post('/api/auth/register-payment', async (req, res, next) => {
 
     const pinHash = await bcrypt.hash(pin, 12);
     await db.query(`
-      INSERT INTO pending_registrations(phone, role, pin_hash, amount, status, updated_at)
-      VALUES($1,$2,$3,100,'pending',NOW())
-      ON CONFLICT(phone) DO UPDATE SET role=EXCLUDED.role, pin_hash=EXCLUDED.pin_hash, amount=100, status='pending', merchant_request_id=NULL, checkout_request_id=NULL, mpesa_receipt=NULL, result_code=NULL, updated_at=NOW()
-    `, [phone, role, pinHash]);
+      INSERT INTO pending_registrations(phone, role, pin_hash, amount, name, status, updated_at)
+      VALUES($1,$2,$3,100,$4,'pending',NOW())
+      ON CONFLICT(phone) DO UPDATE SET role=EXCLUDED.role, pin_hash=EXCLUDED.pin_hash, amount=100, name=EXCLUDED.name, status='pending', merchant_request_id=NULL, checkout_request_id=NULL, mpesa_receipt=NULL, result_code=NULL, updated_at=NOW()
+    `, [phone, role, pinHash, name]);
 
     const { token: accessToken, cfg } = await mpesaAccessToken();
     const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
@@ -933,55 +959,101 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
     const checkoutId = stk?.CheckoutRequestID;
     const resultCode = Number(stk?.ResultCode);
     const resultDescription = String(stk?.ResultDesc || '');
-    console.log('M-Pesa callback received', {
-      checkoutRequestId: checkoutId || null,
-      resultCode: Number.isFinite(resultCode) ? resultCode : null,
-      resultDescription: resultDescription || null,
-    });
-    if (checkoutId) {
-      const pending = (await db.query('SELECT * FROM pending_registrations WHERE checkout_request_id=$1', [checkoutId])).rows[0];
-      if (pending) {
-        if (resultCode === 0) {
-          const items = stk.CallbackMetadata?.Item || [];
-          const getItem = (name) => items.find((item) => item.Name === name)?.Value;
-          const amount = Number(getItem('Amount') || 0);
-          const receipt = getItem('MpesaReceiptNumber') || null;
-          const phone = normalizePhone(getItem('PhoneNumber') ? String(getItem('PhoneNumber')) : pending.phone);
-          if (amount !== 100 || phone !== pending.phone) {
-            await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, 1, 'Callback validation failed: amount or phone number did not match.']);
-          } else {
-            const client = await db.pool?.connect?.();
-            // db.cjs exposes query only; use a transaction through its pool when available.
-            if (client) {
-              try {
-                await client.query('BEGIN');
-                const existing = await client.query('SELECT * FROM users WHERE phone=$1 FOR UPDATE', [pending.phone]);
-                let u = existing.rows[0];
-                if (!u) {
-                  u = (await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') RETURNING *`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash])).rows[0];
-                }
-                await client.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, updated_at=NOW() WHERE id=$1`, [pending.id, receipt]);
-                await client.query('COMMIT');
-              } catch (txError) { await client.query('ROLLBACK'); throw txError; } finally { client.release(); }
-            } else {
-              await db.query(`UPDATE pending_registrations SET status='paid', mpesa_receipt=$2, result_code=0, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, receipt, resultDescription || 'Payment completed successfully']);
-              await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status) VALUES('',$1,$2,$3,$4,true,$5,true,'verified') ON CONFLICT(phone) DO NOTHING`, [`phone+${pending.phone}@latielle.local`, await bcrypt.hash(crypto.randomUUID(), 8), pending.role, pending.phone, pending.pin_hash]);
-            }
-          }
+    if (!checkoutId) return res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+
+    const pendingRegistration = (await db.query('SELECT * FROM pending_registrations WHERE checkout_request_id=$1',[checkoutId])).rows[0];
+    if (pendingRegistration) {
+      if (resultCode === 0) {
+        const items = stk.CallbackMetadata?.Item || [];
+        const getItem = (name) => items.find((item) => item.Name === name)?.Value;
+        const amount = Number(getItem('Amount') || 0);
+        const receipt = getItem('MpesaReceiptNumber') || null;
+        const phone = normalizePhone(getItem('PhoneNumber') ? String(getItem('PhoneNumber')) : pendingRegistration.phone);
+        if (amount !== 100 || phone !== pendingRegistration.phone) {
+          await db.query(`UPDATE pending_registrations SET status='failed',result_code=$2,result_description=$3,updated_at=NOW() WHERE id=$1`,[pendingRegistration.id,1,'Callback validation failed: amount or phone number did not match.']);
         } else {
-          await db.query(`UPDATE pending_registrations SET status='failed', result_code=$2, result_description=$3, updated_at=NOW() WHERE id=$1`, [pending.id, resultCode, mpesaResultMessage(resultCode, resultDescription)]);
+          const client = await db.pool?.connect?.();
+          if (client) {
+            try {
+              await client.query('BEGIN');
+              const existing = await client.query('SELECT * FROM users WHERE phone=$1 FOR UPDATE',[pendingRegistration.phone]);
+              if (!existing.rows[0]) {
+                await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at) VALUES($1,$2,$3,$4,$5,true,$6,true,'verified',true,NOW())`,[pendingRegistration.name,`phone+${pendingRegistration.phone}@latielle.local`,await bcrypt.hash(crypto.randomUUID(),8),pendingRegistration.role,pendingRegistration.phone,pendingRegistration.pin_hash]);
+              }
+              await client.query(`UPDATE pending_registrations SET status='paid',mpesa_receipt=$2,result_code=0,result_description=$3,updated_at=NOW() WHERE id=$1`,[pendingRegistration.id,receipt,resultDescription || 'Payment completed successfully']);
+              await client.query('COMMIT');
+            } catch(txError){await client.query('ROLLBACK');throw txError;} finally{client.release();}
+          } else {
+            await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at) VALUES($1,$2,$3,$4,$5,true,$6,true,'verified',true,NOW()) ON CONFLICT(phone) DO NOTHING`,[pendingRegistration.name,`phone+${pendingRegistration.phone}@latielle.local`,await bcrypt.hash(crypto.randomUUID(),8),pendingRegistration.role,pendingRegistration.phone,pendingRegistration.pin_hash]);
+            await db.query(`UPDATE pending_registrations SET status='paid',mpesa_receipt=$2,result_code=0,result_description=$3,updated_at=NOW() WHERE id=$1`,[pendingRegistration.id,receipt,resultDescription || 'Payment completed successfully']);
+          }
         }
+      } else {
+        await db.query(`UPDATE pending_registrations SET status='failed',result_code=$2,result_description=$3,updated_at=NOW() WHERE id=$1`,[pendingRegistration.id,resultCode,mpesaResultMessage(resultCode,resultDescription)]);
+      }
+      return res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    }
+
+    const detail = (await db.query(`SELECT dr.*,u.phone buyer_phone FROM detail_requests dr JOIN users u ON u.id=dr.buyer_id WHERE dr.checkout_request_id=$1 FOR UPDATE`,[checkoutId])).rows[0];
+    if (detail) {
+      if (detail.payment_status === 'paid') return res.json({ ResultCode: 0, ResultDesc: 'Already processed' });
+      if (resultCode === 0) {
+        const items = stk.CallbackMetadata?.Item || [];
+        const getItem = (name) => items.find((item) => item.Name === name)?.Value;
+        const amount = Number(getItem('Amount') || 0);
+        const receipt = getItem('MpesaReceiptNumber') || null;
+        const phone = normalizePhone(getItem('PhoneNumber') ? String(getItem('PhoneNumber')) : detail.buyer_phone);
+        if (amount !== DETAIL_REQUEST_FEE || phone !== normalizePhone(detail.buyer_phone)) {
+          await db.query(`UPDATE detail_requests SET payment_status='failed',status='pending_payment',updated_at=NOW(),rejection_reason=$2 WHERE id=$1`,[detail.id,'Payment callback validation failed. Please start the payment again.']);
+        } else {
+          const paidUpdate = await db.query(`UPDATE detail_requests SET payment_status='paid',amount_paid=$2,mpesa_receipt=$3,status='pending_approval',updated_at=NOW() WHERE id=$1 AND payment_status <> 'paid' RETURNING id`,[detail.id,DETAIL_REQUEST_FEE,receipt]);
+          if (paidUpdate.rows[0]) {
+            await db.query(`INSERT INTO entity_records(entity_name,data) VALUES('Transaction',$1)`,[JSON.stringify({user_email:detail.buyer_phone,phone_number:detail.buyer_phone,amount:DETAIL_REQUEST_FEE,service_type:'detail_request',reference_id:detail.id,mpesa_receipt:receipt,status:'successful',checkout_request_id:checkoutId,description:'Successful M-Pesa payment for confidential business details'})]);
+          }
+        }
+      } else {
+        await db.query(`UPDATE detail_requests SET payment_status='failed',status='pending_payment',updated_at=NOW(),rejection_reason=$2 WHERE id=$1`,[detail.id,mpesaResultMessage(resultCode,resultDescription)]);
+      }
+    }
+
+    const listing = (await db.query(`SELECT l.*,u.phone seller_phone FROM listings l JOIN users u ON u.id=l.seller_id WHERE l.checkout_request_id=$1`,[checkoutId])).rows[0];
+    if (listing) {
+      if (listing.payment_status === 'paid') return res.json({ ResultCode: 0, ResultDesc: 'Already processed' });
+      if (resultCode === 0) {
+        const items = stk.CallbackMetadata?.Item || [];
+        const getItem = (name) => items.find((item) => item.Name === name)?.Value;
+        const amount = Number(getItem('Amount') || 0);
+        const receipt = getItem('MpesaReceiptNumber') || null;
+        const phone = normalizePhone(getItem('PhoneNumber') ? String(getItem('PhoneNumber')) : listing.seller_phone);
+        if (amount !== Number(listing.payment_amount) || phone !== normalizePhone(listing.seller_phone)) {
+          await db.query(`UPDATE listings SET payment_status='failed',updated_at=NOW() WHERE id=$1`,[listing.id]);
+        } else {
+          const paid = await db.query(`UPDATE listings SET payment_status='paid',mpesa_receipt=$2,status='pending',updated_at=NOW() WHERE id=$1 AND payment_status <> 'paid' RETURNING id`,[listing.id,receipt]);
+          if (paid.rows[0]) await db.query(`INSERT INTO entity_records(entity_name,data) VALUES('Transaction',$1)`,[JSON.stringify({user_email:listing.seller_phone,phone_number:listing.seller_phone,amount,service_type:`${listing.metadata?.listing_type || 'basic'}_listing`,reference_id:listing.id,mpesa_receipt:receipt,status:'successful',checkout_request_id:checkoutId,description:'Successful M-Pesa listing fee payment'})]);
+        }
+      } else {
+        await db.query(`UPDATE listings SET payment_status='failed',updated_at=NOW() WHERE id=$1`,[listing.id]);
       }
     }
     res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
   } catch (error) { next(error); }
 });
 
-app.post('/api/auth/login-pin', async (req,res,next)=>{
+app.post('/api/auth/login-pin', sensitiveRateLimit, async (req,res,next)=>{
   try {
     const phone=normalizePhone(req.body.phone), pin=String(req.body.pin||'');
+    if (!isKenyanPhone(phone) || !/^\d{4}$/.test(pin)) return res.status(401).json({error:'Invalid phone number or PIN'});
     const r=await db.query(`SELECT * FROM users WHERE phone=$1`,[phone]); const u=r.rows[0];
-    if(!u || !u.phone_verified || !u.pin_hash || !(await bcrypt.compare(pin,u.pin_hash))) return res.status(401).json({error:'Invalid phone number or PIN'});
+    if (!u || !u.phone_verified || !u.pin_hash) return res.status(401).json({error:'Invalid phone number or PIN'});
+    if (u.pin_locked_until && new Date(u.pin_locked_until) > new Date()) return res.status(429).json({error:'Too many failed attempts. Please try again later.'});
+    const valid = await bcrypt.compare(pin,u.pin_hash);
+    if (!valid) {
+      const attempts = Number(u.failed_login_attempts || 0) + 1;
+      const lockedUntil = attempts >= 5 ? new Date(Date.now() + 15 * 60_000) : null;
+      await db.query('UPDATE users SET failed_login_attempts=$2,pin_locked_until=$3 WHERE id=$1',[u.id, lockedUntil ? 5 : attempts, lockedUntil]);
+      return res.status(401).json({error:'Invalid phone number or PIN'});
+    }
+    await db.query('UPDATE users SET failed_login_attempts=0,pin_locked_until=NULL WHERE id=$1',[u.id]);
     res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});
   }catch(e){next(e)}
 });
@@ -991,92 +1063,317 @@ app.post('/api/auth/set-pin', auth(), async (req,res,next)=>{
 });
 
 app.patch('/api/auth/profile', auth(), async (req,res,next)=>{
-  try { const allowed=['name','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs','verification_status']; const sets=[], vals=[req.user.id]; for(const k of allowed) if(req.body[k]!==undefined){sets.push(`${k}=$${vals.length+1}`); vals.push(typeof req.body[k]==='object'?JSON.stringify(req.body[k]):req.body[k]);} if(!sets.length) return res.json(phoneUser((await db.query('SELECT * FROM users WHERE id=$1',vals)).rows[0])); const r=await db.query(`UPDATE users SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals); res.json(phoneUser(r.rows[0])); }catch(e){next(e)}
+  try {
+    const current = (await db.query('SELECT * FROM users WHERE id=$1',[req.user.id])).rows[0];
+    if (!current) return res.status(404).json({error:'User not found'});
+    const allowed=['bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs'];
+    const sets=[], vals=[req.user.id];
+    for(const k of allowed) if(req.body[k]!==undefined){sets.push(`${k}=$${vals.length+1}`); vals.push(typeof req.body[k]==='object'?JSON.stringify(req.body[k]):req.body[k]);}
+    if (req.body.name !== undefined || req.body.full_name !== undefined) {
+      if (current.name_locked) return res.status(403).json({error:'Your verified name cannot be changed.'});
+      const newName=String(req.body.name ?? req.body.full_name ?? '').trim();
+      if (newName) { sets.push(`name=$${vals.length+1}`); vals.push(newName); }
+    }
+    if(!sets.length) return res.json(phoneUser(current));
+    const r=await db.query(`UPDATE users SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals);
+    res.json(phoneUser(r.rows[0]));
+  }catch(e){next(e)}
 });
 
 /* =====================================================
    GENERIC ENTITY API FOR MIGRATED FRONTEND
 ===================================================== */
-const entityMap = { PhoneUser:'users', User:'users', BusinessListing:'listings' };
-function publicEntity(name,row){
+const entityMap = { PhoneUser:'users', User:'users', BusinessListing:'listings', DetailRequest:'detail_requests' };
+
+function publicEntity(name,row, options={}){
+  if(!row) return null;
   if(name==='PhoneUser') return phoneUser(row);
-  if(name==='User') return {...row, name:row.name, phone:row.phone, favorites:row.favorites||[]};
-  if(name==='BusinessListing') return {...row, ...(row.metadata || {}), created_date:row.created_at};
+  if(name==='User') { const safe={...row, name:row.name, phone:row.phone, favorites:row.favorites||[]}; delete safe.password_hash; delete safe.pin_hash; return safe; }
+  if(name==='BusinessListing') {
+    const raw = {...(row.metadata || {})};
+    const publicFields = ['asking_price','category','county','sub_county','town','listing_type','years_operating','employees','reason_for_selling','monthly_gross_sales','monthly_net_sales','financial_records_available','photos','videos','is_verified','views_count'];
+    const metadata = options.includePrivate ? raw : Object.fromEntries(publicFields.filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]]));
+    const base = {...row, ...(metadata), created_date:row.created_at};
+    if (!options.includePrivate) {
+      delete base.seller_id;
+      delete base.seller_email;
+      delete base.metadata;
+    }
+    return base;
+  }
+  if(name==='DetailRequest') {
+    return {
+      id: row.id,
+      listing_id: row.listing_id,
+      buyer_email: row.buyer_phone || row.buyer_email || '',
+      seller_email: row.seller_email || '',
+      listing_title: row.listing_title || '',
+      status: row.status,
+      payment_status: row.payment_status,
+      amount_paid: Number(row.amount_paid || 0),
+      mpesa_receipt: row.mpesa_receipt || null,
+      checkout_request_id: row.checkout_request_id || null,
+      message: row.message || '',
+      rejection_reason: row.rejection_reason || '',
+      admin_response: row.admin_response || '',
+      response_history: row.response_history || [],
+      responded_at: row.responded_at || null,
+      created_date: row.created_at,
+      updated_date: row.updated_at || row.created_at,
+    };
+  }
   return row;
 }
+
+function isAdmin(req){ return req.user?.role === 'admin'; }
 
 app.get('/api/entities/:entity', optionalAuth, async (req,res,next)=>{
  try{
   const name=req.params.entity;
   if(name!=='BusinessListing' && !req.user) return res.status(401).json({error:'Authentication required'});
+  const filters=req.query.filters?JSON.parse(req.query.filters):{};
+  const limit=Math.min(Math.max(Number(req.query.limit)||100,1),500);
+
   if(name==='BusinessListing'){
-    const filters=req.query.filters?JSON.parse(req.query.filters):{}; let q=`SELECT l.*,u.name seller_name,u.email seller_email FROM listings l JOIN users u ON u.id=l.seller_id`; const vals=[]; const clauses=[];
+    const vals=[]; const clauses=[];
+    if(filters.created_by){
+      if(!req.user) return res.status(401).json({error:'Authentication required'});
+      const identifier=String(req.user.phone || req.user.email || req.user.id);
+      if(!isAdmin(req) && String(filters.created_by)!==identifier) return res.status(403).json({error:'Forbidden'});
+      vals.push(filters.created_by);clauses.push(`(u.email=$${vals.length} OR u.phone=$${vals.length} OR u.id::text=$${vals.length})`);
+    }
     if(filters.status){vals.push(filters.status);clauses.push(`l.status=$${vals.length}`)}
-    if(filters.created_by){vals.push(filters.created_by);clauses.push(`(u.email=$${vals.length} OR u.id::text=$${vals.length})`)}
-    if(clauses.length) q+=' WHERE '+clauses.join(' AND '); q+=' ORDER BY l.created_at DESC LIMIT '+Math.min(Number(req.query.limit)||100,200);
+    // Public users may only see approved/active listings; owners/admins can see their own drafts.
+    if(!isAdmin(req) && !filters.created_by) clauses.push(`l.status IN ('approved','active')`);
+    let q=`SELECT l.*,u.name seller_name,u.email seller_email FROM listings l JOIN users u ON u.id=l.seller_id`;
+    if(clauses.length) q+=' WHERE '+clauses.join(' AND ');
+    q+=` ORDER BY l.created_at DESC LIMIT ${limit}`;
+    const rows=(await db.query(q,vals)).rows;
+    return res.json(rows.map(r=>publicEntity(name,r,{includePrivate:isAdmin(req) || r.seller_id===req.user?.id})));
+  }
+
+  if(name==='PhoneUser' || name==='User'){
+    if (!isAdmin(req) && filters.id && filters.id !== req.user.id) return res.status(403).json({error:'Forbidden'});
+    const vals=[]; const clauses=[];
+    for(const [k,v] of Object.entries(filters)){
+      const col=k==='phone_number'?'phone':k==='full_name'?'name':k;
+      if(['id','phone','name','role','verification_status'].includes(col)){ vals.push(v); clauses.push(`${col}=$${vals.length}`); }
+    }
+    if(!isAdmin(req) && !clauses.some(c=>c.startsWith('id='))) { vals.push(req.user.id); clauses.push(`id=$${vals.length}`); }
+    const where=clauses.length?' WHERE '+clauses.join(' AND '):'';
+    const r=await db.query(`SELECT * FROM users${where} ORDER BY created_at DESC LIMIT ${limit}`,vals);
+    return res.json(r.rows.map(x=>publicEntity(name,x)));
+  }
+
+  if(name==='DetailRequest'){
+    if(!['buyer','seller','admin'].includes(req.user.role)) return res.status(403).json({error:'Forbidden'});
+    const vals=[]; const clauses=[];
+    if (req.user.role === 'buyer') { vals.push(req.user.id); clauses.push(`dr.buyer_id=$${vals.length}`); }
+    if (req.user.role === 'seller') { vals.push(req.user.id); clauses.push(`l.seller_id=$${vals.length}`); clauses.push(`dr.payment_status='paid'`); }
+    if (req.user.role === 'admin') { clauses.push(`dr.payment_status='paid'`); }
+    if(filters.buyer_email){ vals.push(filters.buyer_email); clauses.push(`bu.phone=$${vals.length}`); }
+    if(filters.seller_email){ vals.push(filters.seller_email); clauses.push(`(su.phone=$${vals.length} OR su.email=$${vals.length})`); }
+    if(filters.payment_status){ vals.push(filters.payment_status); clauses.push(`dr.payment_status=$${vals.length}`); }
+    let q=`SELECT dr.*,bu.phone buyer_phone,su.email seller_email,l.title listing_title FROM detail_requests dr JOIN users bu ON bu.id=dr.buyer_id JOIN listings l ON l.id=dr.listing_id JOIN users su ON su.id=l.seller_id`;
+    if(clauses.length) q+=' WHERE '+clauses.join(' AND ');
+    q+=` ORDER BY dr.created_at DESC LIMIT ${limit}`;
     return res.json((await db.query(q,vals)).rows.map(r=>publicEntity(name,r)));
   }
-  if(name==='PhoneUser' || name==='User'){
-    const filters=req.query.filters?JSON.parse(req.query.filters):{}; const vals=[]; const clauses=[];
-    for(const [k,v] of Object.entries(filters)){ const col=k==='phone_number'?'phone':k==='full_name'?'name':k; if(['id','phone','name','role','verification_status'].includes(col)){ vals.push(v); clauses.push(`${col}=$${vals.length}`); } }
-    const where=clauses.length?' WHERE '+clauses.join(' AND '):''; const r=await db.query(`SELECT * FROM users${where} ORDER BY created_at DESC LIMIT ${Math.min(Number(req.query.limit)||100,500)}`,vals); return res.json(r.rows.map(x=>publicEntity(name,x)));
+
+  const vals=[name]; const clauses=['entity_name=$1'];
+  // Generic application records are admin-only except a small owner-scoped set.
+  if(!isAdmin(req) && ['Transaction','Report','SupportRequest','Notification','Conversation','BuyerPreference'].includes(name)) {
+    const identifier=req.user.phone || req.user.id;
+    vals.push(identifier); clauses.push(`(data->>'user_email'=$${vals.length} OR data->>'buyer_email'=$${vals.length} OR data->>'seller_email'=$${vals.length} OR data->>'recipient_email'=$${vals.length} OR data->>'user_id'=$${vals.length})`);
   }
-  const filters=req.query.filters?JSON.parse(req.query.filters):{}; const vals=[name]; const clauses=['entity_name=$1'];
-  for(const [k,v] of Object.entries(filters)){vals.push(v);clauses.push(`data->>$${vals.length}=$${vals.length+0}`)}
-  const r=await db.query(`SELECT id,data,created_at,updated_at FROM entity_records WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT ${Math.min(Number(req.query.limit)||100,500)}`,vals);
+  const r=await db.query(`SELECT id,data,created_at,updated_at FROM entity_records WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT ${limit}`,vals);
   res.json(r.rows.map(x=>({id:x.id,created_date:x.created_at,updated_date:x.updated_at,...x.data})));
  }catch(e){next(e)}
 });
 
 app.get('/api/entities/:entity/:id', optionalAuth, async(req,res,next)=>{
- try{const n=req.params.entity,id=req.params.id;
+ try{
+  const n=req.params.entity,id=req.params.id;
   if(n!=='BusinessListing' && !req.user) return res.status(401).json({error:'Authentication required'});
-  if(n==='BusinessListing') return res.json(publicEntity(n,(await db.query(`SELECT l.*,u.name seller_name,u.email seller_email FROM listings l JOIN users u ON u.id=l.seller_id WHERE l.id=$1`,[id])).rows[0]));
-  if(n==='PhoneUser'||n==='User') return res.json(publicEntity(n,(await db.query(`SELECT * FROM users WHERE id=$1`,[id])).rows[0]));
-  const r=await db.query(`SELECT id,data,created_at,updated_at FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]); if(!r.rows[0]) return res.status(404).json({error:'Not found'}); res.json({id:r.rows[0].id,created_date:r.rows[0].created_at,...r.rows[0].data});
+  if(n==='BusinessListing'){
+    const row=(await db.query(`SELECT l.*,u.name seller_name,u.email seller_email FROM listings l JOIN users u ON u.id=l.seller_id WHERE l.id=$1`,[id])).rows[0];
+    if(!row) return res.status(404).json({error:'Not found'});
+    if(!isAdmin(req) && row.status!=='approved' && row.status!=='active' && row.seller_id!==req.user?.id) return res.status(404).json({error:'Not found'});
+    return res.json(publicEntity(n,row,{includePrivate:isAdmin(req) || row.seller_id===req.user?.id}));
+  }
+  if(n==='PhoneUser'||n==='User'){
+    if(id!==req.user.id && !isAdmin(req)) return res.status(403).json({error:'Forbidden'});
+    const row=(await db.query(`SELECT * FROM users WHERE id=$1`,[id])).rows[0];
+    if(!row) return res.status(404).json({error:'Not found'});
+    return res.json(publicEntity(n,row));
+  }
+  if(n==='DetailRequest'){
+    const q=await db.query(`SELECT dr.*,bu.phone buyer_phone,su.email seller_email,l.title listing_title,l.seller_id FROM detail_requests dr JOIN users bu ON bu.id=dr.buyer_id JOIN listings l ON l.id=dr.listing_id JOIN users su ON su.id=l.seller_id WHERE dr.id=$1`,[id]);
+    const row=q.rows[0]; if(!row) return res.status(404).json({error:'Not found'});
+    if(!isAdmin(req) && req.user.id!==row.buyer_id && req.user.id!==row.seller_id) return res.status(403).json({error:'Forbidden'});
+    if(!isAdmin(req) && row.payment_status!=='paid') return res.json(publicEntity(n,row));
+    return res.json(publicEntity(n,row));
+  }
+  const r=await db.query(`SELECT id,data,created_at,updated_at FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]);
+  if(!r.rows[0]) return res.status(404).json({error:'Not found'});
+  if(!isAdmin(req)){
+    const d=r.rows[0].data||{}; const identifier=req.user.phone||req.user.email||req.user.id;
+    const owned=[d.user_email,d.buyer_email,d.seller_email,d.recipient_email,d.user_id].filter(Boolean).includes(identifier);
+    if(!owned) return res.status(403).json({error:'Forbidden'});
+  }
+  res.json({id:r.rows[0].id,created_date:r.rows[0].created_at,...r.rows[0].data});
  }catch(e){next(e)}
 });
 
 app.post('/api/entities/:entity', auth(), async(req,res,next)=>{
- try{const n=req.params.entity,d=req.body||{};
-  if(n==='BusinessListing'){const r=await db.query(`INSERT INTO listings(seller_id,title,description,price,status,metadata) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[req.user.id,d.title||'',d.description||'',d.price||0,d.status||'active',JSON.stringify(Object.fromEntries(Object.entries(d).filter(([k])=>!['title','description','price','status'].includes(k))))]);return res.status(201).json(publicEntity(n,r.rows[0]));}
-  const r=await db.query(`INSERT INTO entity_records(entity_name,data) VALUES($1,$2) RETURNING id,data,created_at,updated_at`,[n,JSON.stringify(d)]);res.status(201).json({id:r.rows[0].id,created_date:r.rows[0].created_at,...d});
+ try{
+  const n=req.params.entity,d=req.body||{};
+  if(n==='BusinessListing'){
+    if(!['seller','admin'].includes(req.user.role)) return res.status(403).json({error:'Only sellers can create listings'});
+    if(!d.title || !d.category || !d.county || !d.town || !d.description) return res.status(400).json({error:'Required listing information is missing.'});
+    if(!Array.isArray(d.photos) || d.photos.length<1) return res.status(400).json({error:'At least one business photo is required.'});
+    if(!Array.isArray(d.videos) || d.videos.length<1) return res.status(400).json({error:'A business video is required.'});
+    for (const field of ['business_licence','registration_cert','owner_id_docs']) if(!Array.isArray(d[field]) || d[field].length<1) return res.status(400).json({error:'All confidential verification documents are required.'});
+    const metadata=Object.fromEntries(Object.entries(d).filter(([k])=>!['title','description','price','status'].includes(k)));
+    const requestedStatus = req.user.role==='admin' ? (d.status || 'draft') : 'pending';
+    const safeStatus = ['draft','pending','approved','active','sold','rejected','archived'].includes(requestedStatus) ? requestedStatus : 'pending';
+    const r=await db.query(`INSERT INTO listings(seller_id,title,description,price,status,metadata) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[req.user.id,d.title,d.description,Number(d.price)||0,safeStatus,JSON.stringify(metadata)]);
+    return res.status(201).json(publicEntity(n,r.rows[0],{includePrivate:true}));
+  }
+  if(n==='DetailRequest') return res.status(405).json({error:'Use the request payment flow to create a detail request.'});
+  if(n==='Report') {
+    if (req.user.role !== 'admin' && String(d.reporter_email || '') !== String(req.user.phone || req.user.email || req.user.id)) return res.status(403).json({error:'Forbidden'});
+    let reportedUserEmail = '';
+    if (d.listing_id) {
+      const owner = (await db.query('SELECT u.email FROM listings l JOIN users u ON u.id=l.seller_id WHERE l.id=$1',[d.listing_id])).rows[0];
+      reportedUserEmail = owner?.email || '';
+    }
+    const reportData = {...d, reported_user_email: reportedUserEmail, reporter_email: req.user.phone || req.user.email || req.user.id};
+    const r=await db.query(`INSERT INTO entity_records(entity_name,data) VALUES('Report',$1) RETURNING id,data,created_at,updated_at`,[JSON.stringify(reportData)]);
+    return res.status(201).json({id:r.rows[0].id,created_date:r.rows[0].created_at,...reportData});
+  }
+  if(!isAdmin(req) && ['Transaction','Report','SupportRequest','Notification','Conversation'].includes(n)) {
+    // Allow only records tied to the authenticated user; callers cannot forge ownership fields.
+    const ownerFields=['user_email','buyer_email','seller_email','recipient_email','sender_email','reporter_email','user_id'];
+    const owns=ownerFields.some(k=>d[k] && String(d[k])===(req.user.phone||req.user.id));
+    if(!owns) return res.status(403).json({error:'Forbidden'});
+  }
+  const r=await db.query(`INSERT INTO entity_records(entity_name,data) VALUES($1,$2) RETURNING id,data,created_at,updated_at`,[n,JSON.stringify(d)]);
+  res.status(201).json({id:r.rows[0].id,created_date:r.rows[0].created_at,...d});
  }catch(e){next(e)}
 });
 
 app.patch('/api/entities/:entity/:id', auth(), async(req,res,next)=>{
- try{const n=req.params.entity,id=req.params.id,d=req.body||{};
-  if(n==='BusinessListing') { const r=await db.query(`UPDATE listings SET title=COALESCE($2,title),description=COALESCE($3,description),price=COALESCE($4,price),status=COALESCE($5,status),metadata=metadata || COALESCE($6,'{}'::jsonb),updated_at=NOW() WHERE id=$1 RETURNING *`,[id,d.title,d.description,d.price,d.status,JSON.stringify(Object.fromEntries(Object.entries(d).filter(([k])=>!['title','description','price','status'].includes(k))))]); if(!r.rows[0])return res.status(404).json({error:'Not found'}); return res.json(publicEntity(n,r.rows[0])); }
-  if(n==='PhoneUser'||n==='User') { if(id!==req.user.id && req.user.role!=='admin')return res.status(403).json({error:'Forbidden'}); const map={full_name:'name',phone_number:'phone'}; const sets=[],vals=[id]; for(const [k,v] of Object.entries(d)){const col=map[k]||k;if(['name','phone','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','verification_status','favorites','business_docs'].includes(col)){sets.push(`${col}=$${vals.length+1}`);vals.push(typeof v==='object'?JSON.stringify(v):v)}} if(!sets.length)return res.json({id}); const r=await db.query(`UPDATE users SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals);return res.json(publicEntity(n,r.rows[0])); }
+ try{
+  const n=req.params.entity,id=req.params.id,d=req.body||{};
+  if(n==='BusinessListing') {
+    const existing=(await db.query(`SELECT * FROM listings WHERE id=$1`,[id])).rows[0];
+    if(!existing) return res.status(404).json({error:'Not found'});
+    if(req.user.role!=='admin' && existing.seller_id!==req.user.id) return res.status(403).json({error:'Forbidden'});
+    if(req.user.role!=='admin' && d.status!==undefined) return res.status(403).json({error:'Only the admin team can change listing approval status.'});
+    const metadata={...d}; for(const k of ['title','description','price','status']) delete metadata[k];
+    const r=await db.query(`UPDATE listings SET title=COALESCE($2,title),description=COALESCE($3,description),price=COALESCE($4,price),status=COALESCE($5,status),metadata=metadata || COALESCE($6,'{}'::jsonb),updated_at=NOW() WHERE id=$1 RETURNING *`,[id,d.title,d.description,d.price,d.status,JSON.stringify(metadata)]);
+    return res.json(publicEntity(n,r.rows[0],{includePrivate:true}));
+  }
+  if(n==='PhoneUser'||n==='User') {
+    if(id!==req.user.id && !isAdmin(req)) return res.status(403).json({error:'Forbidden'});
+    const current=(await db.query('SELECT * FROM users WHERE id=$1',[id])).rows[0]; if(!current) return res.status(404).json({error:'Not found'});
+    if(d.full_name!==undefined || d.name!==undefined){ if(current.name_locked && !isAdmin(req)) return res.status(403).json({error:'Your verified name cannot be changed.'}); }
+    const map={full_name:'name',phone_number:'phone'}; const sets=[],vals=[id];
+    const allowed=['name','phone','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs'];
+    if (isAdmin(req)) allowed.push('verification_status','name_locked','verified_at');
+    for(const [k,v] of Object.entries(d)){const col=map[k]||k;if(allowed.includes(col)){sets.push(`${col}=$${vals.length+1}`);vals.push(typeof v==='object'?JSON.stringify(v):v)}}
+    if(!sets.length)return res.json(publicEntity(n,current));
+    const r=await db.query(`UPDATE users SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals);return res.json(publicEntity(n,r.rows[0]));
+  }
+  if(n==='DetailRequest'){
+    if(!isAdmin(req)) return res.status(403).json({error:'Only the admin team can update buyer requests.'});
+    const allowed=['status','rejection_reason','seller_response','admin_response','response_history','responded_at']; const sets=[],vals=[id];
+    for(const k of allowed) if(d[k]!==undefined){sets.push(`${k}=$${vals.length+1}`);vals.push(d[k]);}
+    if(!sets.length) return res.status(400).json({error:'No supported fields to update.'});
+    sets.push(`updated_at=NOW()`);
+    const r=await db.query(`UPDATE detail_requests SET ${sets.join(',')} WHERE id=$1 RETURNING *`,vals); if(!r.rows[0]) return res.status(404).json({error:'Not found'});
+    const full=(await db.query(`SELECT dr.*,bu.phone buyer_phone,su.email seller_email,l.title listing_title FROM detail_requests dr JOIN users bu ON bu.id=dr.buyer_id JOIN listings l ON l.id=dr.listing_id JOIN users su ON su.id=l.seller_id WHERE dr.id=$1`,[id])).rows[0];
+    return res.json(publicEntity(n,full));
+  }
+  if(!isAdmin(req)){
+    const old=await db.query(`SELECT data FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]); if(!old.rows[0])return res.status(404).json({error:'Not found'});
+    const data=old.rows[0].data||{}; const identifier=req.user.phone||req.user.email||req.user.id;
+    if(![data.user_email,data.buyer_email,data.seller_email,data.recipient_email,data.user_id].filter(Boolean).includes(identifier)) return res.status(403).json({error:'Forbidden'});
+  }
   const old=await db.query(`SELECT data FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]); if(!old.rows[0])return res.status(404).json({error:'Not found'}); const merged={...old.rows[0].data,...d}; const r=await db.query(`UPDATE entity_records SET data=$3,updated_at=NOW() WHERE entity_name=$1 AND id=$2 RETURNING *`,[n,id,JSON.stringify(merged)]);res.json({id,...merged});
  }catch(e){next(e)}
 });
-app.delete('/api/entities/:entity/:id', auth(), async(req,res,next)=>{try{const n=req.params.entity,id=req.params.id;if(n==='BusinessListing'){await db.query('DELETE FROM listings WHERE id=$1',[id]);return res.status(204).end()} await db.query('DELETE FROM entity_records WHERE entity_name=$1 AND id=$2',[n,id]);res.status(204).end()}catch(e){next(e)}});
+
+app.delete('/api/entities/:entity/:id', auth(), async(req,res,next)=>{try{const n=req.params.entity,id=req.params.id;if(n==='BusinessListing'){const existing=(await db.query('SELECT seller_id FROM listings WHERE id=$1',[id])).rows[0];if(!existing)return res.status(404).end();if(req.user.role!=='admin'&&existing.seller_id!==req.user.id)return res.status(403).json({error:'Forbidden'});await db.query('DELETE FROM listings WHERE id=$1',[id]);return res.status(204).end()} if(!isAdmin(req))return res.status(403).json({error:'Forbidden'}); await db.query('DELETE FROM entity_records WHERE entity_name=$1 AND id=$2',[n,id]);res.status(204).end()}catch(e){next(e)}});
 
 /* =====================================================
    FUNCTION MIGRATION ENDPOINTS
 ===================================================== */
-app.post('/api/functions/:name', async(req,res,next)=>{
+app.post('/api/functions/:name', optionalAuth, sensitiveRateLimit, async(req,res,next)=>{
  try{const n=req.params.name,p=req.body||{};
   if(n==='loginWithPin') return res.redirect(307, '/api/auth/login-pin');
   if(n==='setPin') {
     const pin=String(p.pin||'');
     if(!/^\d{4}$/.test(pin)) return res.status(400).json({error:'PIN must be exactly 4 digits'});
     const userId=p.userId || req.user?.id;
-    if(!userId) return res.status(401).json({error:'Authentication required'});
+    if(!userId || !req.user) return res.status(401).json({error:'Authentication required'});
+    if(userId !== req.user.id && req.user.role !== 'admin') return res.status(403).json({error:'Forbidden'});
     const hash=await bcrypt.hash(pin,12);
     const r=await db.query('UPDATE users SET pin_hash=$2,has_pin=true WHERE id=$1 RETURNING *',[userId,hash]);
     if(!r.rows[0]) return res.status(404).json({error:'User not found'});
     return res.json({success:true,user:phoneUser(r.rows[0])});
   }
-  if(n==='submitDetailRequest') { const r=await db.query('INSERT INTO detail_requests(listing_id,buyer_id,message) VALUES($1,$2,$3) RETURNING *',[p.listingId||p.listing_id, p.buyerId||req.user?.id, p.message||'']);return res.json({success:true,request:r.rows[0]}); }
+  if(n==='submitDetailRequest') {
+    if (!req.user || !['buyer','admin'].includes(req.user.role)) return res.status(401).json({error:'Buyer authentication is required.'});
+    const listingId = p.listingId || p.listing_id;
+    if (!listingId) return res.status(400).json({error:'listingId is required.'});
+    const listing = (await db.query(`SELECT l.*,u.email seller_email,u.phone seller_phone FROM listings l JOIN users u ON u.id=l.seller_id WHERE l.id=$1 AND l.status IN ('approved','active')`,[listingId])).rows[0];
+    if (!listing) return res.status(404).json({error:'This business is no longer available.'});
+    const existing = (await db.query(`SELECT * FROM detail_requests WHERE listing_id=$1 AND buyer_id=$2 AND payment_status='paid' AND status NOT IN ('rejected') ORDER BY created_at DESC LIMIT 1`,[listingId,req.user.id])).rows[0];
+    if (existing) return res.json({success:true,already_exists:true,request:existing,payment_status:'paid'});
+
+    const pending = (await db.query(`SELECT * FROM detail_requests WHERE listing_id=$1 AND buyer_id=$2 AND payment_status IN ('unpaid','pending','failed') ORDER BY created_at DESC LIMIT 1`,[listingId,req.user.id])).rows[0];
+    const request = pending || (await db.query(`INSERT INTO detail_requests(listing_id,buyer_id,message,status,payment_status,amount_paid) VALUES($1,$2,$3,'pending_payment','pending',0) RETURNING *`,[listingId,req.user.id,String(p.message||'').slice(0,4000)])).rows[0];
+
+    if (request.payment_status === 'failed') await db.query(`UPDATE detail_requests SET payment_status='pending',status='pending_payment',rejection_reason=NULL,updated_at=NOW() WHERE id=$1`,[request.id]);
+    const phoneRow=(await db.query('SELECT phone FROM users WHERE id=$1',[req.user.id])).rows[0];
+    const phone=normalizePhone(p.phone || phoneRow?.phone);
+    if(!isKenyanPhone(phone)) return res.status(400).json({error:'Add a valid Kenyan M-Pesa phone number to your profile before paying.'});
+
+    const {token: accessToken,cfg}=await mpesaAccessToken();
+    const timestamp=new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
+    const password=mpesaPassword(cfg.shortcode,cfg.passkey,timestamp);
+    const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:cfg.transactionType,Amount:DETAIL_REQUEST_FEE,PartyA:phone.slice(1),PartyB:cfg.partyB,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:String(request.id).slice(0,12),TransactionDesc:'Latielle details'})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||data.ResponseCode!=='0') return res.status(502).json({success:false,request_id:request.id,payment_status:'pending',error:data.errorMessage||data.ResponseDescription||'M-Pesa payment request failed. Your request remains saved as awaiting payment.'});
+    await db.query(`UPDATE detail_requests SET checkout_request_id=$2,payment_status='pending',status='pending_payment',updated_at=NOW() WHERE id=$1`,[request.id,data.CheckoutRequestID]);
+    await db.query(`INSERT INTO entity_records(entity_name,data) VALUES('Transaction',$1)`,[JSON.stringify({user_email:req.user.phone||req.user.id,phone_number:phone,amount:DETAIL_REQUEST_FEE,service_type:'detail_request',reference_id:request.id,status:'pending',checkout_request_id:data.CheckoutRequestID,description:'M-Pesa payment for confidential business details'})]);
+    return res.json({success:true,request_id:request.id,checkoutRequestId:data.CheckoutRequestID,amount:DETAIL_REQUEST_FEE,payment_status:'pending',message:`M-Pesa prompt sent for KES ${DETAIL_REQUEST_FEE.toLocaleString()}. The request will be sent to the admin team only after payment is confirmed.`});
+  }
   if(n==='mpesaStkPush') {
-    // Existing listing-payment flow.
-    const phone=normalizePhone(p.phone); const amount=Number(p.amount||0);
+    if (!req.user || !['seller','admin'].includes(req.user.role)) return res.status(401).json({error:'Authentication required.'});
+    const phone=normalizePhone(p.phone);
+    let amount=Number(p.amount||0);
+    let referenceId=String(p.detailRequestId||p.listingId||'LATIELLE');
+    if (p.detailRequestId && !p.listingId) {
+      const listing=(await db.query('SELECT id,seller_id,metadata FROM listings WHERE id=$1',[p.detailRequestId])).rows[0];
+      if (listing) {
+        if (listing.seller_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({error:'Forbidden'});
+        const listingType=listing.metadata?.listing_type || 'basic';
+        const listingFees={basic:2000,featured:3000,premium:4000};
+        amount=listingFees[listingType] || 2000;
+        referenceId=listing.id;
+      }
+    }
     if(!isKenyanPhone(phone) || !Number.isFinite(amount) || amount<=0) return res.status(400).json({error:'Valid phone number and amount are required'});
     const {token: accessToken,cfg}=await mpesaAccessToken(); const timestamp=new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14); const password=mpesaPassword(cfg.shortcode,cfg.passkey,timestamp);
-    const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:cfg.transactionType,Amount:Math.round(amount),PartyA:phone.slice(1),PartyB:cfg.partyB,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:String(p.detailRequestId||p.listingId||'LATIELLE'),TransactionDesc:String(p.listingTitle||'Latielle Market Hub payment').slice(0,13)})});
-    const data=await response.json().catch(()=>({})); if(!response.ok||data.ResponseCode!=='0') return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'M-Pesa payment request failed'}); return res.json({success:true,checkoutRequestId:data.CheckoutRequestID,merchantRequestId:data.MerchantRequestID,message:'M-Pesa payment prompt sent'});
+    const response=await fetch(`${cfg.baseUrl}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({BusinessShortCode:cfg.shortcode,Password:password,Timestamp:timestamp,TransactionType:cfg.transactionType,Amount:Math.round(amount),PartyA:phone.slice(1),PartyB:cfg.partyB,PhoneNumber:phone.slice(1),CallBackURL:cfg.callbackUrl,AccountReference:referenceId.slice(0,12),TransactionDesc:String(p.listingTitle||'Latielle payment').slice(0,13)})});
+    const data=await response.json().catch(()=>({})); if(!response.ok||data.ResponseCode!=='0') return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'M-Pesa payment request failed'});
+    if (p.detailRequestId) {
+      await db.query(`UPDATE listings SET payment_status='pending',payment_amount=$2,checkout_request_id=$3,updated_at=NOW() WHERE id=$1`,[referenceId,amount,data.CheckoutRequestID]);
+    }
+    return res.json({success:true,checkoutRequestId:data.CheckoutRequestID,merchantRequestId:data.MerchantRequestID,message:'M-Pesa payment prompt sent'});
   }
   if(n==='notifyAdminSupportRequest') {
     try {
@@ -1138,10 +1435,14 @@ app.post('/api/email', auth(), async (req,res,next)=>{
   try {
     if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return res.status(503).json({success:false,error:'Email service is not configured.'});
     const payload = req.body || {};
+    const recipients = Array.isArray(payload.to) ? payload.to : [payload.to];
+    if (!recipients.length || recipients.some((address) => String(address || '').toLowerCase() !== SUPPORT_EMAIL.toLowerCase())) {
+      return res.status(403).json({success:false,error:'This email endpoint is restricted to LATIELLE support notifications.'});
+    }
     const response = await fetch('https://api.resend.com/emails',{
       method:'POST',
       headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},
-      body:JSON.stringify({from:payload.from || process.env.RESEND_FROM_EMAIL,to:payload.to,subject:payload.subject || 'LATIELLE MARKET HUB',text:payload.body || ''}),
+      body:JSON.stringify({from:process.env.RESEND_FROM_EMAIL,to:[SUPPORT_EMAIL],subject:String(payload.subject || 'LATIELLE MARKET HUB').slice(0,160),text:String(payload.body || '').slice(0,12000)}),
     });
     const data = await response.json().catch(()=>({}));
     if(!response.ok) return res.status(502).json({success:false,error:data.message || 'Email service rejected the message.'});
@@ -1159,12 +1460,20 @@ app.post('/api/ai', optionalAuth, async (req,res,next)=>{
       ? req.body.input.slice(-12).map((item) => ({ role:item.role === 'assistant' ? 'assistant' : 'user', content:String(item.content || '').slice(0, 3000) }))
       : String(req.body?.prompt || '').slice(0, 10000);
 
-    const response = await fetch('https://api.openai.com/v1/responses',{
+    const callModel = async (model) => fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-      body:JSON.stringify({model:OPENAI_MODEL,instructions:OPENAI_INSTRUCTIONS,input,store:false,max_output_tokens:700}),
+      body:JSON.stringify({model,instructions:OPENAI_INSTRUCTIONS,input,store:false,max_output_tokens:700}),
       signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
+
+    let response = await callModel(OPENAI_MODEL);
+    // If the configured model is unavailable for this account, retry once with a broadly available fallback.
+    if (!response.ok && [400,404].includes(response.status) && OPENAI_FALLBACK_MODEL && OPENAI_FALLBACK_MODEL !== OPENAI_MODEL) {
+      const firstError = await response.clone().json().catch(()=>({}));
+      console.warn('Primary OpenAI model unavailable; trying fallback model.', {model:OPENAI_MODEL,status:response.status,error:firstError?.error?.message});
+      response = await callModel(OPENAI_FALLBACK_MODEL);
+    }
     const data = await response.json().catch(()=>({}));
     if(!response.ok) {
       console.error('OpenAI request failed', {status:response.status,error:data?.error?.message});
@@ -1174,12 +1483,11 @@ app.post('/api/ai', optionalAuth, async (req,res,next)=>{
     if(!answer) return res.status(502).json({error:'LATIELLE support did not return an answer.'});
     res.json({success:true,answer});
   }catch(e){
-    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
-      return res.status(504).json({error:'LATIELLE support took too long to respond. Please try again.'});
-    }
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return res.status(504).json({error:'LATIELLE support took too long to respond. Please try again.'});
     next(e);
   }
 });
+
 app.post('/api/auth/forgot-password', async (_req,res)=>res.json({success:true,message:'Password reset is not used for phone/PIN accounts.'}));
 app.post('/api/auth/reset-password', async (_req,res)=>res.status(400).json({error:'Password reset is not available for phone/PIN accounts.'}));
 
@@ -1202,7 +1510,7 @@ app.use((error, req, res, _next) => {
     stack: error?.stack,
   });
   if (res.headersSent) return;
-  res.status(500).json({ error: error?.message || 'Internal server error' });
+  res.status(500).json({ error: process.env.NODE_ENV === 'production' ? 'Something went wrong. Please try again.' : (error?.message || 'Internal server error') });
 });
 
 async function startServer() {
