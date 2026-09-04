@@ -86,7 +86,7 @@ export const api = {
         };
         return request("/api/upload", { method: "POST", body: file, headers });
       },
-      InvokeLLM({ prompt, ...rest }) { return request("/api/ai", { method: "POST", body: JSON.stringify({ prompt, ...rest }) }); },
+      InvokeLLM({ prompt, input, ...rest }) { return request("/api/ai", { method: "POST", body: JSON.stringify(input ? { input, ...rest } : { prompt, ...rest }) }); },
       SendEmail(payload) { return request("/api/email", { method: "POST", body: JSON.stringify(payload) }); },
     },
   },
