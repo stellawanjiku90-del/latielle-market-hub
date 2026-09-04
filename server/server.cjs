@@ -247,7 +247,9 @@ app.post('/api/upload', auth(), uploadRateLimit, express.raw({ type: () => true,
     };
     if (!signatureOk(mimeType, fileBuffer)) return res.status(415).json({ error: 'The file contents do not match the selected file type.' });
 
-    let filename = decodeURIComponent(String(req.headers['x-file-name'] || 'upload')).replace(/[\\/\0]/g, '').trim();
+    let filename = 'upload';
+    try { filename = decodeURIComponent(String(req.headers['x-file-name'] || 'upload')); } catch { return res.status(400).json({ error: 'The uploaded filename is invalid.' }); }
+    filename = filename.replace(/[\\/\0]/g, '').trim();
     if (!filename) filename = 'upload';
     filename = filename.slice(0, 180);
     const isPrivate = kind === 'document';
@@ -304,11 +306,21 @@ app.get('/api/health', async (_req, res) => {
   // Render should use this endpoint to verify that the web process is alive.
   // Database/API integrations are reported separately and must not make the
   // frontend unreachable during a temporary database outage.
+  const payment = Boolean(
+    process.env.MPESA_SHORTCODE &&
+    process.env.MPESA_PASSKEY &&
+    process.env.MPESA_CONSUMER_KEY &&
+    process.env.MPESA_CONSUMER_SECRET &&
+    process.env.MPESA_CALLBACK_URL
+  );
+  const auth = Boolean(process.env.JWT_SECRET);
   res.status(200).json({
     ok: true,
     database,
     ai: Boolean(process.env.OPENAI_API_KEY),
     email: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
+    payment,
+    auth,
   });
 });
 
@@ -1249,7 +1261,7 @@ app.patch('/api/entities/:entity/:id', auth(), async(req,res,next)=>{
     if(id!==req.user.id && !isAdmin(req)) return res.status(403).json({error:'Forbidden'});
     const current=(await db.query('SELECT * FROM users WHERE id=$1',[id])).rows[0]; if(!current) return res.status(404).json({error:'Not found'});
     if(d.full_name!==undefined || d.name!==undefined){ if(current.name_locked && !isAdmin(req)) return res.status(403).json({error:'Your verified name cannot be changed.'}); }
-    const map={full_name:'name',phone_number:'phone'}; const sets=[],vals=[id];
+    const map={full_name:'name'}; const sets=[],vals=[id];
     const allowed=['name','phone','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs'];
     if (isAdmin(req)) allowed.push('verification_status','name_locked','verified_at');
     for(const [k,v] of Object.entries(d)){const col=map[k]||k;if(allowed.includes(col)){sets.push(`${col}=$${vals.length+1}`);vals.push(typeof v==='object'?JSON.stringify(v):v)}}
