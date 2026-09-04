@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { api } from "@/api/apiClient";
+import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Star, ShieldCheck } from "lucide-react";
 import HeroSection from "../components/HeroSection";
@@ -14,15 +15,22 @@ const TESTIMONIALS = [
 ];
 
 export default function Home() {
+  const { user, isLoadingAuth, authChecked, dashboardFor } = useAuth();
   const [featured, setFeatured] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!authChecked || isLoadingAuth || user) return;
     api.entities.BusinessListing.filter({ status: "approved" }, "-created_date", 6)
       .then(setFeatured)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [authChecked, isLoadingAuth, user]);
+
+  if (!authChecked || isLoadingAuth) {
+    return <div className="min-h-[60vh] flex items-center justify-center" aria-label="Loading marketplace"><div className="h-8 w-8 rounded-full border-2 border-border border-t-primary animate-spin" /></div>;
+  }
+  if (user) return <Navigate to={dashboardFor(user)} replace />;
 
   return (
     <div className="bg-background">

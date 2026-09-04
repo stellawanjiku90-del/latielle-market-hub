@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { api, apiFunction } from "@/api/apiClient";
-import { useAuth } from "@/lib/useAuth";
-import { getSession, consumeReturnUrl } from "@/lib/auth";
+import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Phone, Loader2, ShieldCheck, Shield, Store, ShoppingBag, KeyRound } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user, isAuthenticated, isLoadingAuth, dashboardFor } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState("role"); // role | phone | pin | signup-pin | payment | profile
   const [selectedRole, setSelectedRole] = useState(null);
   const [phone, setPhone] = useState("+254");
@@ -20,15 +20,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const existingSession = getSession();
-  if (existingSession) {
-    const destination = existingSession.role === "admin"
-      ? "/admin"
-      : existingSession.role === "seller"
-        ? "/seller-dashboard"
-        : "/buyer-dashboard";
-    return <Navigate to={destination} replace />;
-  }
+  if (!isLoadingAuth && isAuthenticated && user) return <Navigate to={dashboardFor(user)} replace />;
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
@@ -47,7 +39,7 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const res = await apiFunction("loginWithPin", { phone: phone.trim(), pin: pinCode });
+      const res = await apiFunction("loginWithPin", { phone: phone.trim(), pin: pinCode, role: selectedRole });
       const data = res.data;
       if (data?.token) localStorage.setItem("auth_token", data.token);
       if (data?.error) throw new Error(data.error);
@@ -92,8 +84,7 @@ export default function Login() {
         const result = await api.request(`/api/auth/registration-status/${encodeURIComponent(checkoutId)}`, { skipAuth: true });
         if (result.status === "paid" && result.token && result.user) {
           localStorage.setItem("auth_token", result.token);
-          setVerifiedUser(result.user);
-          finalizeLogin(result.user, "/profile");
+          finalizeLogin(result.user);
           return;
         }
         if (result.status === "failed") {
@@ -122,30 +113,28 @@ export default function Login() {
   };
 
 
-  const finalizeLogin = (user, forcedDest) => {
+  const finalizeLogin = (user) => {
+    // The server returns the authenticated account's role. That role is
+    // authoritative and determines the dashboard immediately. A phone number
+    // may have both a buyer and seller account, so never infer the destination
+    // from the previous URL or from the other account.
+    const authenticatedRole = user?.role;
+    const dest = authenticatedRole === "admin"
+      ? "/admin"
+      : authenticatedRole === "seller"
+        ? "/seller-dashboard"
+        : "/buyer-dashboard";
+
     login({
       userId: user.id,
       phone: user.phone_number,
-      role: user.role || selectedRole || "buyer",
+      role: authenticatedRole || selectedRole || "buyer",
       name: user.full_name || "",
       full_name: user.full_name || "",
       email: user.email || "",
     });
-    const returnUrl = consumeReturnUrl();
-    let dest;
-    if (forcedDest) {
-      dest = forcedDest;
-    } else if (returnUrl && returnUrl !== "/login") {
-      dest = returnUrl;
-    } else {
-      // Admins always go to admin dashboard; otherwise honour the role
-      // the user just chose on the login screen.
-      const role = user.role === "admin" ? "admin" : (selectedRole || user.role);
-      if (role === "admin") dest = "/admin";
-      else if (role === "seller") dest = "/seller-dashboard";
-      else dest = "/buyer-dashboard";
-    }
-    setTimeout(() => { window.location.href = dest; }, 50);
+
+    navigate(dest, { replace: true });
   };
 
   return (
@@ -267,8 +256,11 @@ export default function Login() {
                 <KeyRound className="h-6 w-6 text-primary" />
               </div>
               <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Enter Your PIN</h1>
-              <p className="text-sm text-muted-foreground text-center font-body mb-6">
+              <p className="text-sm text-muted-foreground text-center font-body mb-2">
                 4-digit PIN for<br /><span className="font-medium text-foreground">{phone}</span>
+              </p>
+              <p className="text-xs text-muted-foreground text-center font-body mb-6">
+                Signing in as <span className="font-medium text-foreground">{selectedRole === "seller" ? "Seller" : "Buyer"}</span>. The same phone and PIN may be used for your other role account.
               </p>
 
               {error && (
