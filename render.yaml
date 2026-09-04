@@ -2,11 +2,14 @@ services:
   - type: web
     name: latielle-market-hub
     runtime: node
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 22.16.0
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
