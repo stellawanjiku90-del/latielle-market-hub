@@ -10,8 +10,15 @@ export function useAuth() {
 
   useEffect(() => {
     const refresh = () => setUser(getSession());
+    const onStorage = (event) => {
+      if (event.key === 'latielle_session' || event.key === 'auth_token' || event.key === null) refresh();
+    };
     listeners.push(refresh);
-    return () => { listeners = listeners.filter(fn => fn !== refresh); };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      listeners = listeners.filter(fn => fn !== refresh);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   const login = (userData) => {
