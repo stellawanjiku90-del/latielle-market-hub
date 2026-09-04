@@ -31,10 +31,6 @@ if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is required');
 }
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is required');
-}
-
 const SUPPORT_EMAIL = process.env.SUPPORT_NOTIFICATION_EMAIL || 'realityofafrica2023@gmail.com';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
 const OPENAI_FALLBACK_MODEL = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini';
@@ -743,35 +739,6 @@ app.get(
 /* =====================================================
    PAYMENT CALLBACK
 ===================================================== */
-
-/* =====================================================
-   SERVE REACT FRONTEND
-===================================================== */
-
-app.use(
-  express.static(
-    path.join(__dirname, '..', 'dist')
-  )
-);
-
-app.get(
-  /^(?!\/api).*/,
-  (_req, res) => {
-    res.sendFile(
-      path.join(
-        __dirname,
-        '..',
-        'dist',
-        'index.html'
-      )
-    );
-  }
-);
-
-/* =====================================================
-   START SERVER
-===================================================== */
-
 
 /* =====================================================
    PHONE AUTHENTICATION
@@ -1514,17 +1481,26 @@ app.use((error, req, res, _next) => {
 });
 
 async function startServer() {
+  // Bind the HTTP port first so Render can reach the frontend even if the
+  // database is temporarily unavailable during a deploy/restart.
+  app.listen(PORT, () => console.log(`Latielle Market Hub listening on ${PORT}`));
+
+  const fs = require('fs');
+  const schemaPath = path.join(__dirname, '..', 'data', 'schema.sql');
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is not configured. The website is running, but database features are unavailable.');
+    return;
+  }
+
   try {
-    const fs = require('fs');
-    const schemaPath = path.join(__dirname, '..', 'data', 'schema.sql');
     if (fs.existsSync(schemaPath)) {
       await db.query(fs.readFileSync(schemaPath, 'utf8'));
       console.log('Database schema verified.');
     }
-    app.listen(PORT, () => console.log(`Latielle Market Hub listening on ${PORT}`));
   } catch (error) {
-    console.error('Failed to initialize database:', error);
-    process.exit(1);
+    // Do not take the whole website offline because a migration/DB connection
+    // is temporarily failing. API calls will surface an appropriate error.
+    console.error('Database initialization failed:', error?.message || error);
   }
 }
 
