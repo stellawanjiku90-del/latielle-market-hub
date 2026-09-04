@@ -98,6 +98,7 @@ export default function FileUploader({ label, accept, multiple = false, value = 
       const { file_url } = await api.integrations.Core.UploadFile({ file: fileToUpload, kind });
       if (!file_url) throw new Error("The server did not return a file URL.");
       previewMetaRef.current[file_url] = { type: file.type, name: file.name };
+      if (!valuesRef.current.includes(localUrl)) return true;
       replaceValue(localUrl, file_url);
       URL.revokeObjectURL(localUrl);
       setPreviews((current) => {
@@ -179,7 +180,7 @@ export default function FileUploader({ label, accept, multiple = false, value = 
                   </button>
                 )}
                 <div className="absolute left-2 bottom-2 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium text-foreground shadow-sm">
-                  {previews[url]?.startsWith("blob:") ? "Uploading…" : "Uploaded"}
+                  {previews[url]?.startsWith("blob:") ? "Preview ready" : "Uploaded"}
                 </div>
                 <button type="button" onClick={() => remove(url)} aria-label={`Remove ${label || "file"}`} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/95 text-foreground shadow flex items-center justify-center hover:bg-destructive hover:text-white transition-colors">
                   <X className="h-4 w-4" />
