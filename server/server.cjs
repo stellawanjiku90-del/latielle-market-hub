@@ -432,6 +432,7 @@ app.get('/api/me', auth(), async (req, res, next) => {
         name,
         email,
         role,
+        phone,
         created_at
       FROM users
       WHERE id = $1
@@ -836,16 +837,16 @@ app.post('/api/auth/register-payment', sensitiveRateLimit, async (req, res, next
     if (!isKenyanPhone(phone)) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
 
-    const existing = await db.query('SELECT id, phone_verified FROM users WHERE phone=$1', [phone]);
+    const existing = await db.query('SELECT id, phone_verified FROM users WHERE phone=$1 AND role=$2', [phone, role]);
     if (existing.rows[0]) {
-      return res.status(409).json({ error: existing.rows[0].phone_verified ? 'This phone number is already registered. Sign in with your PIN.' : 'This phone number already has a registration in progress.' });
+      return res.status(409).json({ error: existing.rows[0].phone_verified ? `This phone number already has a ${role} account. Choose ${role === 'buyer' ? 'Seller' : 'Buyer'} if you want to access your other role.` : 'This phone number already has a registration in progress for this role.' });
     }
 
     const pinHash = await bcrypt.hash(pin, 12);
     await db.query(`
       INSERT INTO pending_registrations(phone, role, pin_hash, amount, name, status, updated_at)
       VALUES($1,$2,$3,100,$4,'pending',NOW())
-      ON CONFLICT(phone) DO UPDATE SET role=EXCLUDED.role, pin_hash=EXCLUDED.pin_hash, amount=100, name=EXCLUDED.name, status='pending', merchant_request_id=NULL, checkout_request_id=NULL, mpesa_receipt=NULL, result_code=NULL, updated_at=NOW()
+      ON CONFLICT(phone, role) DO UPDATE SET pin_hash=EXCLUDED.pin_hash, amount=100, name=EXCLUDED.name, status='pending', merchant_request_id=NULL, checkout_request_id=NULL, mpesa_receipt=NULL, result_code=NULL, result_description=NULL, updated_at=NOW()
     `, [phone, role, pinHash, name]);
 
     const { token: accessToken, cfg } = await mpesaAccessToken();
@@ -894,7 +895,7 @@ app.post('/api/auth/register-payment', sensitiveRateLimit, async (req, res, next
       phoneLast4: phone.slice(-4),
     });
 
-    await db.query(`UPDATE pending_registrations SET merchant_request_id=$2, checkout_request_id=$3, updated_at=NOW() WHERE phone=$1`, [phone, data.MerchantRequestID || null, data.CheckoutRequestID]);
+    await db.query(`UPDATE pending_registrations SET merchant_request_id=$2, checkout_request_id=$3, updated_at=NOW() WHERE phone=$1 AND role=$4`, [phone, data.MerchantRequestID || null, data.CheckoutRequestID, role]);
 
     res.json({ success: true, checkoutRequestId: data.CheckoutRequestID, message: 'M-Pesa payment request accepted. Check your phone for the prompt.' });
   } catch (e) { next(e); }
@@ -908,7 +909,7 @@ app.get('/api/auth/registration-status/:checkoutRequestId', async (req, res, nex
     const pending = r.rows[0];
     if (!pending) return res.status(404).json({ error: 'Registration payment not found.' });
     if (pending.status === 'paid') {
-      const u = (await db.query('SELECT * FROM users WHERE phone=$1', [pending.phone])).rows[0];
+      const u = (await db.query('SELECT * FROM users WHERE phone=$1 AND role=$2', [pending.phone, pending.role])).rows[0];
       if (u) return res.json({ success: true, status: 'paid', user: phoneUser(u), token: token({ id: u.id, email: u.email, role: u.role }) });
     }
     const resultCode = pending.result_code ?? null;
@@ -946,15 +947,17 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
           if (client) {
             try {
               await client.query('BEGIN');
-              const existing = await client.query('SELECT * FROM users WHERE phone=$1 FOR UPDATE',[pendingRegistration.phone]);
+              const existing = await client.query('SELECT * FROM users WHERE phone=$1 AND role=$2 FOR UPDATE',[pendingRegistration.phone, pendingRegistration.role]);
               if (!existing.rows[0]) {
-                await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at) VALUES($1,$2,$3,$4,$5,true,$6,true,'verified',true,NOW())`,[pendingRegistration.name,`phone+${pendingRegistration.phone}@latielle.local`,await bcrypt.hash(crypto.randomUUID(),8),pendingRegistration.role,pendingRegistration.phone,pendingRegistration.pin_hash]);
+                const accountEmail = `phone+${pendingRegistration.phone.replace(/[^0-9]/g, '')}+${pendingRegistration.role}@latielle.local`;
+                await client.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at) VALUES($1,$2,$3,$4,$5,true,$6,true,'verified',true,NOW())`,[pendingRegistration.name,accountEmail,await bcrypt.hash(crypto.randomUUID(),8),pendingRegistration.role,pendingRegistration.phone,pendingRegistration.pin_hash]);
               }
               await client.query(`UPDATE pending_registrations SET status='paid',mpesa_receipt=$2,result_code=0,result_description=$3,updated_at=NOW() WHERE id=$1`,[pendingRegistration.id,receipt,resultDescription || 'Payment completed successfully']);
               await client.query('COMMIT');
             } catch(txError){await client.query('ROLLBACK');throw txError;} finally{client.release();}
           } else {
-            await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at) VALUES($1,$2,$3,$4,$5,true,$6,true,'verified',true,NOW()) ON CONFLICT(phone) DO NOTHING`,[pendingRegistration.name,`phone+${pendingRegistration.phone}@latielle.local`,await bcrypt.hash(crypto.randomUUID(),8),pendingRegistration.role,pendingRegistration.phone,pendingRegistration.pin_hash]);
+            const accountEmail = `phone+${pendingRegistration.phone.replace(/[^0-9]/g, '')}+${pendingRegistration.role}@latielle.local`;
+            await db.query(`INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at) VALUES($1,$2,$3,$4,$5,true,$6,true,'verified',true,NOW()) ON CONFLICT(phone,role) DO NOTHING`,[pendingRegistration.name,accountEmail,await bcrypt.hash(crypto.randomUUID(),8),pendingRegistration.role,pendingRegistration.phone,pendingRegistration.pin_hash]);
             await db.query(`UPDATE pending_registrations SET status='paid',mpesa_receipt=$2,result_code=0,result_description=$3,updated_at=NOW() WHERE id=$1`,[pendingRegistration.id,receipt,resultDescription || 'Payment completed successfully']);
           }
         }
@@ -1012,9 +1015,19 @@ app.post('/api/payments/mpesa/callback', async (req, res, next) => {
 app.post('/api/auth/login-pin', sensitiveRateLimit, async (req,res,next)=>{
   try {
     const phone=normalizePhone(req.body.phone), pin=String(req.body.pin||'');
-    if (!isKenyanPhone(phone) || !/^\d{4}$/.test(pin)) return res.status(401).json({error:'Invalid phone number or PIN'});
-    const r=await db.query(`SELECT * FROM users WHERE phone=$1`,[phone]); const u=r.rows[0];
-    if (!u || !u.phone_verified || !u.pin_hash) return res.status(401).json({error:'Invalid phone number or PIN'});
+    const requestedRole = String(req.body.role || '').toLowerCase();
+    if (!isKenyanPhone(phone) || !/^\d{4}$/.test(pin) || !['buyer','seller'].includes(requestedRole)) {
+      return res.status(401).json({error:'Select Buyer or Seller and enter a valid phone number and 4-digit PIN.'});
+    }
+
+    // Phone numbers are intentionally not globally unique: one verified phone
+    // may have one buyer account and one seller account. The selected role is
+    // part of authentication so the user lands in the correct dashboard.
+    const r=await db.query(`SELECT * FROM users WHERE phone=$1 AND role=$2`,[phone, requestedRole]);
+    const u=r.rows[0];
+    if (!u || !u.phone_verified || !u.pin_hash) {
+      return res.status(401).json({error:`No verified ${requestedRole} account was found for this phone number. Register this role first.`});
+    }
     if (u.pin_locked_until && new Date(u.pin_locked_until) > new Date()) return res.status(429).json({error:'Too many failed attempts. Please try again later.'});
     const valid = await bcrypt.compare(pin,u.pin_hash);
     if (!valid) {
@@ -1250,7 +1263,8 @@ app.patch('/api/entities/:entity/:id', auth(), async(req,res,next)=>{
     const current=(await db.query('SELECT * FROM users WHERE id=$1',[id])).rows[0]; if(!current) return res.status(404).json({error:'Not found'});
     if(d.full_name!==undefined || d.name!==undefined){ if(current.name_locked && !isAdmin(req)) return res.status(403).json({error:'Your verified name cannot be changed.'}); }
     const map={full_name:'name',phone_number:'phone'}; const sets=[],vals=[id];
-    const allowed=['name','phone','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs'];
+    const allowed=['name','bio','gender','county','subcounty','profile_picture','national_id','selfie_url','id_document_url','favorites','business_docs'];
+    if (isAdmin(req)) allowed.push('phone');
     if (isAdmin(req)) allowed.push('verification_status','name_locked','verified_at');
     for(const [k,v] of Object.entries(d)){const col=map[k]||k;if(allowed.includes(col)){sets.push(`${col}=$${vals.length+1}`);vals.push(typeof v==='object'?JSON.stringify(v):v)}}
     if(!sets.length)return res.json(publicEntity(n,current));
