@@ -1,97 +1,119 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { api } from '@/api/apiClient';
+import { getSession, saveSession, clearSession } from '@/lib/auth';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
+
+const dashboardFor = (user) => {
+  if (user?.role === 'admin') return '/admin';
+  if (user?.role === 'seller') return '/seller-dashboard';
+  return '/buyer-dashboard';
+};
+
+const sessionUser = (user) => ({
+  userId: user?.id || user?.userId,
+  phone: user?.phone_number || user?.phone || '',
+  role: user?.role || 'buyer',
+  name: user?.full_name || user?.name || '',
+  full_name: user?.full_name || user?.name || '',
+  email: user?.email || '',
+  profile_picture: user?.profile_picture || '',
+});
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
+  const initialSession = getSession();
+  const [user, setUser] = useState(initialSession);
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialSession));
+  const [isLoadingAuth, setIsLoadingAuth] = useState(Boolean(localStorage.getItem('auth_token')));
+  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
+  const [authChecked, setAuthChecked] = useState(!localStorage.getItem('auth_token'));
+  const [appPublicSettings, setAppPublicSettings] = useState(null);
 
   useEffect(() => {
     checkAppState();
   }, []);
 
   const checkAppState = async () => {
-    try {
-      setIsLoadingPublicSettings(true);
-      setAuthError(null);
-      if (localStorage.getItem('auth_token')) {
-        await checkUserAuth();
-      } else {
-        setIsLoadingAuth(false);
-        setIsAuthenticated(false);
-        setAuthChecked(true);
-      }
-      setIsLoadingPublicSettings(false);
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      setAuthError({ type: 'unknown', message: error.message || 'An unexpected error occurred' });
-      setIsLoadingPublicSettings(false);
+    setAuthError(null);
+    if (localStorage.getItem('auth_token')) {
+      await checkUserAuth();
+    } else {
+      setUser(null);
+      setIsAuthenticated(false);
       setIsLoadingAuth(false);
+      setAuthChecked(true);
     }
   };
 
   const checkUserAuth = async () => {
+    setIsLoadingAuth(true);
     try {
-      // Now check if the user is authenticated
-      setIsLoadingAuth(true);
       const currentUser = await api.auth.me();
-      setUser(currentUser);
+      const normalized = sessionUser(currentUser);
+      saveSession(normalized);
+      setUser(normalized);
       setIsAuthenticated(true);
-      setIsLoadingAuth(false);
-      setAuthChecked(true);
+      setAuthError(null);
     } catch (error) {
-      console.error('User auth check failed:', error);
-      setIsLoadingAuth(false);
+      clearSession();
+      setUser(null);
       setIsAuthenticated(false);
-      setAuthChecked(true);
-      
-      // If user auth fails, it might be an expired token
-      if (error.status === 401 || error.status === 403) {
-        setAuthError({
-          type: 'auth_required',
-          message: 'Authentication required'
-        });
+      if (error?.status === 401 || error?.status === 403) {
+        setAuthError({ type: 'auth_required', message: 'Your session has expired. Please sign in again.' });
       }
+    } finally {
+      setIsLoadingAuth(false);
+      setAuthChecked(true);
     }
+  };
+
+  const login = (userData) => {
+    const normalized = sessionUser(userData);
+    saveSession(normalized);
+    setUser(normalized);
+    setIsAuthenticated(true);
+    setAuthError(null);
+    setAuthChecked(true);
+  };
+
+  const updateUser = (updates) => {
+    setUser((current) => {
+      if (!current) return current;
+      const next = { ...current, ...updates };
+      saveSession(next);
+      return next;
+    });
   };
 
   const logout = (shouldRedirect = true) => {
+    clearSession();
     setUser(null);
     setIsAuthenticated(false);
-    
-    if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
-      api.auth.logout(window.location.href);
-    } else {
-      // Just remove the token without redirect
-      api.auth.logout();
-    }
+    setAuthError(null);
+    if (shouldRedirect) window.location.replace('/');
   };
 
   const navigateToLogin = () => {
-    // Use the SDK's redirectToLogin method
-    api.auth.redirectToLogin(window.location.href);
+    api.auth.redirectToLogin();
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated, 
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated,
       isLoadingAuth,
       isLoadingPublicSettings,
       authError,
       appPublicSettings,
       authChecked,
+      dashboardFor,
+      login,
+      updateUser,
       logout,
       navigateToLogin,
       checkUserAuth,
-      checkAppState
+      checkAppState,
     }}>
       {children}
     </AuthContext.Provider>
@@ -100,8 +122,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
