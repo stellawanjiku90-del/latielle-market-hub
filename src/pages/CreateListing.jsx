@@ -134,7 +134,9 @@ export default function CreateListing() {
       if (!form.videos.length) { toast.error("Please upload a business video before continuing."); return false; }
     }
     if (s === 2) {
-      // Confidential documents are optional. Buyers may request them later.
+      if (!form.business_licence.length) { toast.error("Please upload your business licence or permit."); return false; }
+      if (!form.registration_cert.length) { toast.error("Please upload your business registration certificate."); return false; }
+      if (!form.owner_id_docs.length) { toast.error("Please upload the owner’s National ID or driving licence."); return false; }
     }
     return true;
   };
@@ -331,17 +333,17 @@ export default function CreateListing() {
                 </div>
                 <FileUploader
                   label="Business Photos"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   kind="photo"
                   multiple
                   value={form.photos}
                   onChange={v => update("photos", v)}
-                  hint="Upload clear photos of the premises, equipment, and products. You can continue while they finish uploading."
+                  hint="Upload clear photos of the premises, equipment, and products. Previews appear immediately."
                   onUploadingChange={active => setPendingUploads(count => Math.max(0, count + (active ? 1 : -1)))}
                 />
                 <FileUploader
                   label="Business Video"
-                  accept="video/*"
+                  accept="video/mp4,video/webm,video/quicktime"
                   kind="video"
                   multiple={false}
                   value={form.videos}
@@ -376,7 +378,7 @@ export default function CreateListing() {
         )}
 
         {step === 2 && (
-          <Card><CardHeader><CardTitle className="font-heading text-lg flex items-center gap-2"><Shield className="h-5 w-5 text-primary" />Confidential Information</CardTitle><CardDescription className="font-body">This information is optional and kept private</CardDescription></CardHeader>
+          <Card><CardHeader><CardTitle className="font-heading text-lg flex items-center gap-2"><Shield className="h-5 w-5 text-primary" />Confidential Information</CardTitle><CardDescription className="font-body">Required verification documents are kept private. Other details are optional.</CardDescription></CardHeader>
             <CardContent className="space-y-4 font-body">
               <div>
                 <Label className="mb-2 block">Exact Business Location (Map Pin)</Label>
@@ -392,37 +394,37 @@ export default function CreateListing() {
               <div className="rounded-xl border border-border bg-muted p-4 space-y-5">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Confidential Documents</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">These are optional supporting documents. If you add them, they stay private and can be reviewed only when the platform rules allow.</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">These documents are required to submit a listing. They stay private and are only accessible to authorised reviewers and, where applicable, approved buyers.</p>
                 </div>
                 <FileUploader
-                  label="Business Licence(s) (optional)"
-                  accept="image/*,application/pdf"
+                  label="Business Licence(s) *"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
                   kind="document"
                   multiple
                   value={form.business_licence}
                   onChange={v => update("business_licence", v)}
                   onUploadingChange={active => setPendingUploads(count => Math.max(0, count + (active ? 1 : -1)))}
-                  hint="Upload your current single business permit or county licence"
+                  hint="Required — upload your current single business permit or county licence."
                 />
                 <FileUploader
-                  label="Business Registration Certificate (optional)"
-                  accept="image/*,application/pdf"
+                  label="Business Registration Certificate *"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
                   kind="document"
                   multiple
                   value={form.registration_cert}
                   onChange={v => update("registration_cert", v)}
                   onUploadingChange={active => setPendingUploads(count => Math.max(0, count + (active ? 1 : -1)))}
-                  hint="Certificate of incorporation or business name registration"
+                  hint="Required — certificate of incorporation or business name registration."
                 />
                 <FileUploader
-                  label="Owner National ID / Driving Licence (optional)"
-                  accept="image/*,application/pdf"
+                  label="Owner National ID / Driving Licence *"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
                   kind="document"
                   multiple
                   value={form.owner_id_docs}
                   onChange={v => update("owner_id_docs", v)}
                   onUploadingChange={active => setPendingUploads(count => Math.max(0, count + (active ? 1 : -1)))}
-                  hint="Front and back of your National ID or Driving Licence"
+                  hint="Required — upload the front and back where applicable."
                 />
               </div>
 

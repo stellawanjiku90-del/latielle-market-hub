@@ -16,7 +16,7 @@ import NotificationBell from "../components/NotificationBell";
 
 const REQUEST_STATUS_MAP = {
   pending_payment: { label: "Pending Payment", variant: "secondary" },
-  paid: { label: "Paid — Awaiting Seller", variant: "outline" },
+  paid: { label: "Paid — Awaiting Admin", variant: "outline" },
   pending_approval: { label: "Awaiting Approval", variant: "outline" },
   approved: { label: "Approved", variant: "default" },
   rejected: { label: "Rejected", variant: "destructive" },
@@ -37,7 +37,7 @@ export default function BuyerDashboard() {
     if (!resolvedUser) return;
     const identifier = resolvedUser.phone || resolvedUser.userId;
     const [myRequests, convs] = await Promise.all([
-      api.entities.DetailRequest.filter({ buyer_email: identifier, payment_status: 'paid' }, "-created_date", 50),
+      api.entities.DetailRequest.filter({ buyer_email: identifier }, "-created_date", 50),
       api.entities.Conversation.filter({ buyer_email: identifier, type: "buyer_seller" }, "-last_message_at", 50),
     ]);
     setRequests(myRequests);
@@ -71,7 +71,7 @@ export default function BuyerDashboard() {
         if (event.type === "delete") return prev.filter(r => r.id !== event.id);
         const exists = prev.some(r => r.id === event.id);
         if (exists) return prev.map(r => r.id === event.id ? rec : r);
-        if (event.type === "create" && rec.payment_status === "paid") return [rec, ...prev];
+        if (event.type === "create") return [rec, ...prev];
         return prev;
       });
     });
@@ -95,7 +95,7 @@ export default function BuyerDashboard() {
     if (!user) return;
     const identifier = user.phone || user.userId;
     const interval = setInterval(async () => {
-      const myRequests = await api.entities.DetailRequest.filter({ buyer_email: identifier, payment_status: 'paid' }, "-created_date", 50);
+      const myRequests = await api.entities.DetailRequest.filter({ buyer_email: identifier }, "-created_date", 50);
       setRequests(myRequests);
     }, 4000);
     return () => clearInterval(interval);

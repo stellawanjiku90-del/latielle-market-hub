@@ -48,7 +48,7 @@ export default function Profile() {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await api.integrations.Core.UploadFile({ file });
+      const { file_url } = await api.integrations.Core.UploadFile({ file, kind: "photo" });
       setForm(prev => ({ ...prev, profile_picture: file_url }));
       toast.success("Photo uploaded");
     } catch {
@@ -111,8 +111,9 @@ export default function Profile() {
               </div>
               <div className="flex-1 space-y-2">
                 <Label htmlFor="name" className="font-body">Full Name</Label>
-                <Input id="name" value={form.full_name} onChange={(e) => setForm(prev => ({ ...prev, full_name: e.target.value }))} placeholder="e.g. James Kamau" className="h-11 font-body" />
+                <Input id="name" value={form.full_name} readOnly={Boolean(record?.name_locked)} onChange={(e) => setForm(prev => ({ ...prev, full_name: e.target.value }))} placeholder="Your verified name" className={`h-11 font-body ${record?.name_locked ? "bg-muted cursor-not-allowed" : ""}`} />
                 <p className="text-[11px] text-muted-foreground font-body">{record?.phone_number}</p>
+                {record?.name_locked && <p className="text-[11px] text-primary font-medium">Verified name — this name cannot be changed.</p>}
               </div>
             </div>
           </CardContent>

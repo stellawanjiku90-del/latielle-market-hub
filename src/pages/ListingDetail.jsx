@@ -66,7 +66,7 @@ export default function ListingDetail() {
   useEffect(() => {
     api.entities.BusinessListing.get(listingId).then(async (data) => {
       setListing(data);
-      const newCount = await trackListingView(listingId, data?.views_count);
+      const newCount = await trackListingView(listingId);
       if (newCount != null) setListing(prev => prev ? { ...prev, views_count: newCount } : prev);
     }).catch(() => {}).finally(() => setLoading(false));
     const session = getSession();
@@ -85,7 +85,6 @@ export default function ListingDetail() {
     await api.entities.Report.create({
       reporter_email: user.phone || user.userId,
       listing_id: listingId,
-      reported_user_email: listing.created_by,
       reason: reportReason,
       details: reportDetails,
       status: "open",
@@ -97,42 +96,59 @@ export default function ListingDetail() {
     setReporting(false);
   };
 
+  const pollDetailRequest = async (id) => {
+    let attempts = 0;
+    const poll = async () => {
+      if (!id || attempts++ >= 40) return;
+      try {
+        const request = await api.entities.DetailRequest.get(id);
+        if (request?.payment_status === "paid") {
+          setPayState("success");
+          toast.success("Payment confirmed. Your request has been sent for admin review.");
+          return;
+        }
+        if (request?.payment_status === "failed") {
+          setPayState("failed");
+          toast.error(request?.rejection_reason || "The payment was not completed. You can try again.");
+          return;
+        }
+      } catch { /* keep polling */ }
+      window.setTimeout(poll, 3000);
+    };
+    poll();
+  };
+
   const handleRequestDetails = async () => {
     if (!user) { redirectToLoginWithReturn(); return; }
     if (selectedItems.length === 0) { toast.error("Please select at least one item to request."); return; }
+    if (!paymentPhone.trim()) { toast.error("Enter the M-Pesa number that should receive the payment prompt."); return; }
     setRequesting(true);
+    setPayState("processing");
     const itemsList = selectedItems.map(i => `- ${i}`).join("\n");
     const fullMessage = `Requested items:\n${itemsList}${requestMessage.trim() ? `\n\nAdditional notes:\n${requestMessage}` : ""}`;
-
-    // Payments temporarily disabled — submit directly for admin verification (free).
-    let result = null;
     try {
       const res = await apiFunction('submitDetailRequest', {
         listingId,
-        buyerEmail: user.phone || user.userId,
-        sellerEmail: listing.created_by,
+        phone: paymentPhone.trim(),
         listingTitle: listing.title || listing.category,
         message: fullMessage,
       });
-      result = res.data;
+      const result = res.data;
+      if (!result?.success) throw new Error(result?.error || "Could not start the payment.");
+      if (result.payment_status === "paid") {
+        setPayState("success");
+        toast.success("Your request has been sent for admin review.");
+      } else {
+        setPayState("processing");
+        toast.success(`M-Pesa prompt sent for KES ${Number(result.amount || 1000).toLocaleString()}. Enter your M-Pesa PIN to send the request.`);
+        if (result.request_id) pollDetailRequest(result.request_id);
+      }
     } catch (e) {
-      toast.error("Something went wrong. Please try again or contact support.");
+      setPayState("failed");
+      toast.error(e.message || "Something went wrong. Please try again.");
+    } finally {
       setRequesting(false);
-      return;
     }
-
-    if (result?.success) {
-      setPayState("success");
-      toast.success("Submitted! Your request is now awaiting admin approval.");
-      setTimeout(() => {
-        const role = user?.role;
-        const dash = role === "admin" ? "/admin" : role === "seller" ? "/seller-dashboard" : "/buyer-dashboard";
-        navigate(dash);
-      }, 1200);
-    } else {
-      toast.error(result?.error || "Failed to submit your request. Please try again.");
-    }
-    setRequesting(false);
   };
 
   if (loading) return (
@@ -306,37 +322,57 @@ export default function ListingDetail() {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground bg-muted border border-border rounded-lg px-3 py-2 mt-3">
-                      ⚠️ The seller retains the right to decline sharing any information at their discretion.
+                      The seller retains the right to decline sharing any information at their discretion.
                     </p>
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-3 mt-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium">Detail request fee</span>
+                        <span className="text-sm font-semibold text-primary">KES 1,000</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">The request is sent to our admin team only after M-Pesa confirms payment.</p>
+                    </div>
                     <div className="mt-3">
                       <span className="text-xs text-muted-foreground">Additional notes (optional)</span>
                       <Textarea className="mt-1" placeholder="Any additional message to the seller..." value={requestMessage} onChange={e => setRequestMessage(e.target.value)} rows={2} />
                     </div>
+                    <div className="mt-3">
+                      <Label className="text-xs font-medium">M-Pesa phone number *</Label>
+                      <Input type="tel" value={paymentPhone} onChange={e => setPaymentPhone(e.target.value)} placeholder="+254 7XX XXX XXX" className="mt-1" />
+                    </div>
                     {payState === "success" ? (
                       <>
                         <Button className="mt-3 w-full gap-2 bg-primary" disabled>
-                          <CheckCircle2 className="h-4 w-4" />Submitted — Pending Verification
+                          <CheckCircle2 className="h-4 w-4" />Paid — Sent for Admin Review
                         </Button>
                         <Link to="/buyer-dashboard">
-                          <Button variant="outline" className="mt-2 w-full gap-2">
-                            Go to my dashboard
-                          </Button>
+                          <Button variant="outline" className="mt-2 w-full gap-2">Go to my dashboard</Button>
                         </Link>
                       </>
                     ) : (
-                      <Button
-                        className="mt-3 w-full gap-2"
-                        onClick={handleRequestDetails}
-                        disabled={requesting || selectedItems.length === 0}
-                      >
-                        {requesting ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" />Submitting...</>
-                        ) : (
-                          <><FileText className="h-4 w-4" />Submit for Verification</>
+                      <>
+                        {payState === "processing" && (
+                          <div className="mt-3 rounded-lg bg-primary/5 border border-primary/20 px-3 py-2.5 text-xs text-muted-foreground flex items-start gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0 mt-0.5" />
+                            <span>Check your phone and enter your M-Pesa PIN. We will send the request to admin only after payment is confirmed.</span>
+                          </div>
                         )}
-                      </Button>
+                        {payState === "failed" && (
+                          <p className="mt-3 text-xs text-destructive">Payment was not completed. Your request remains in your dashboard as awaiting payment.</p>
+                        )}
+                        <Button
+                          className="mt-3 w-full gap-2"
+                          onClick={handleRequestDetails}
+                          disabled={requesting || selectedItems.length === 0}
+                        >
+                          {requesting ? (
+                            <><Loader2 className="h-4 w-4 animate-spin" />Starting payment...</>
+                          ) : (
+                            <><FileText className="h-4 w-4" />Pay KES 1,000 &amp; Send Request</>
+                          )}
+                        </Button>
+                      </>
                     )}
-                    <p className="text-[10px] text-muted-foreground/70 text-center">Your request will be reviewed and approved by our admin team.</p>
+                    <p className="text-[10px] text-muted-foreground/70 text-center">Unpaid requests stay private in your dashboard and are not sent to admin.</p>
                   </DialogContent>
                 </Dialog>
               </div>

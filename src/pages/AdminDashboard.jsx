@@ -53,7 +53,7 @@ export default function AdminDashboard() {
         api.entities.SupportRequest.list("-created_date", 100),
         api.entities.DetailRequest.list("-created_date", 100),
       ]);
-      setUsers(u); setListings(l); setTransactions(t); setReports(r); setConversations(c); setSupportRequests(s);
+      setUsers(u); setListings(l.filter(x => x.payment_status === "paid" || ["approved","active","sold","rejected"].includes(x.status))); setTransactions(t); setReports(r); setConversations(c); setSupportRequests(s);
       // Only show requests where the buyer has actually paid (not abandoned/unpaid)
       setDetailRequests(dr.filter(d => d.status !== "pending_payment"));
       setLoading(false);
@@ -174,7 +174,7 @@ export default function AdminDashboard() {
 
   if (loading) return <div className="pt-24 flex justify-center"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
-  const pendingListings = listings.filter(l => l.status === "pending").length;
+  const pendingListings = listings.filter(l => l.status === "pending" && l.payment_status === "paid").length;
   const pendingRequests = detailRequests.filter(d => d.status === "paid" || d.status === "pending_approval").length;
   const pendingUsers = 0;
   const totalRevenue = transactions.filter(t => t.status === "successful").reduce((sum, t) => sum + (t.amount || 0), 0);

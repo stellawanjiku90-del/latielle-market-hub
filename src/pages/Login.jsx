@@ -5,7 +5,7 @@ import { getSession, consumeReturnUrl } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Phone, Loader2, ShieldCheck, Shield, Store, ShoppingBag, User, KeyRound } from "lucide-react";
+import { Phone, Loader2, ShieldCheck, Shield, Store, ShoppingBag, KeyRound } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Link, Navigate } from "react-router-dom";
 
@@ -14,14 +14,11 @@ export default function Login() {
   const [step, setStep] = useState("role"); // role | phone | pin | signup-pin | payment | profile
   const [selectedRole, setSelectedRole] = useState(null);
   const [phone, setPhone] = useState("+254");
-  const [checkoutRequestId, setCheckoutRequestId] = useState("");
   const [pinCode, setPinCode] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [surname, setSurname] = useState("");
+  const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [verifiedUser, setVerifiedUser] = useState(null);
 
   if (getSession()) return <Navigate to="/" replace />;
 
@@ -60,17 +57,18 @@ export default function Login() {
     if (!phone || phone.trim().length < 10) { setError("Please enter a valid Kenyan phone number."); return; }
     setPinCode("");
     setPinConfirm("");
+    setFullName("");
     setStep("signup-pin");
   };
 
   const handleRegistrationPayment = async () => {
     setError("");
+    if (fullName.trim().split(/\s+/).length < 2) { setError("Enter your first name and surname exactly as they should appear on your profile."); return; }
     if (!/^\d{4}$/.test(pinCode)) { setError("PIN must be exactly 4 digits."); return; }
     if (pinCode !== pinConfirm) { setError("PINs do not match."); return; }
     setLoading(true);
     try {
-      const data = await api.request("/api/auth/register-payment", { method: "POST", skipAuth: true, body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode }) });
-      setCheckoutRequestId(data.checkoutRequestId);
+      const data = await api.request("/api/auth/register-payment", { method: "POST", skipAuth: true, body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode, name: fullName.trim() }) });
       setStep("payment");
       pollRegistration(data.checkoutRequestId);
     } catch (err) {
@@ -105,8 +103,7 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const data = await api.request("/api/auth/register-payment", { method: "POST", skipAuth: true, body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode }) });
-      setCheckoutRequestId(data.checkoutRequestId);
+      const data = await api.request("/api/auth/register-payment", { method: "POST", skipAuth: true, body: JSON.stringify({ phone: phone.trim(), role: selectedRole, pin: pinCode, name: fullName.trim() }) });
       setStep("payment");
       pollRegistration(data.checkoutRequestId);
     } catch (err) {
@@ -116,50 +113,6 @@ export default function Login() {
     }
   };
 
-  const handleSaveProfile = async () => {
-    setError("");
-    if (!firstName.trim()) { setError("Please enter your first name."); return; }
-    if (!surname.trim()) { setError("Please enter your surname."); return; }
-    setLoading(true);
-    try {
-      const fullName = `${firstName.trim()} ${surname.trim()}`;
-      await api.entities.PhoneUser.update(verifiedUser.id, { full_name: fullName });
-      const updated = { ...verifiedUser, full_name: fullName };
-      setVerifiedUser(updated);
-      // After profile, prompt to set a PIN if not set yet
-      if (!updated.has_pin) {
-        setStep("setpin");
-        setPinCode(""); setPinConfirm("");
-      } else {
-        finalizeLogin(updated);
-      }
-    } catch (err) {
-      setError(err.message || "Failed to save profile.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSetPin = async () => {
-    setError("");
-    if (!/^\d{4}$/.test(pinCode)) { setError("PIN must be exactly 4 digits."); return; }
-    if (pinCode !== pinConfirm) { setError("PINs do not match."); return; }
-    setLoading(true);
-    try {
-      const res = await apiFunction("setPin", {
-        userId: verifiedUser.id,
-        phone: phone.trim(),
-        pin: pinCode,
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      // New sign-up → send them to complete their full profile
-      finalizeLogin({ ...verifiedUser, has_pin: true }, "/profile");
-    } catch (err) {
-      setError(err.message || "Failed to set PIN.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const finalizeLogin = (user, forcedDest) => {
     login({
@@ -168,6 +121,7 @@ export default function Login() {
       role: user.role || selectedRole || "buyer",
       name: user.full_name || "",
       full_name: user.full_name || "",
+      email: user.email || "",
     });
     const returnUrl = consumeReturnUrl();
     let dest;
@@ -344,10 +298,14 @@ export default function Login() {
               <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Create Your PIN</h1>
               <p className="text-sm text-muted-foreground text-center font-body mb-6">Set a 4-digit PIN, then pay a one-time <span className="font-medium text-foreground">KSh 100 verification fee</span>.</p>
               {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>}
+              <div className="space-y-4 mb-5">
+                <div><Label className="font-body">Full Name *</Label><Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. James Kamau" className="h-11 mt-1" autoComplete="name" /></div>
+                <p className="text-xs text-muted-foreground">Use your real name. Once the KSh 100 verification payment succeeds, this verified name is locked on your account and cannot be edited.</p>
+              </div>
               <div className="space-y-5">
                 <div><Label className="font-body mb-2 block">4-digit PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
                 <div><Label className="font-body mb-2 block">Confirm PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinConfirm} onChange={setPinConfirm}><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
-                <Button className="w-full h-12 font-body font-medium" onClick={handleRegistrationPayment} disabled={loading || pinCode.length<4 || pinConfirm.length<4}>{loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/>Starting M-Pesa...</> : "Pay KSh 100 & Verify"}</Button>
+                <Button className="w-full h-12 font-body font-medium" onClick={handleRegistrationPayment} disabled={loading || fullName.trim().split(/\s+/).length < 2 || pinCode.length<4 || pinConfirm.length<4}>{loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/>Starting M-Pesa...</> : "Pay KSh 100 & Verify"}</Button>
               </div>
               <button onClick={() => { setStep("phone"); setError(""); }} className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground font-body">← Back</button>
             </>
@@ -382,85 +340,6 @@ export default function Login() {
             </>
           )}
 
-          {/* STEP: Profile Setup */}
-          {step === "profile" && (
-            <>
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mx-auto mb-4">
-                <User className="h-6 w-6 text-primary" />
-              </div>
-              <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Complete Your Profile</h1>
-              <p className="text-sm text-muted-foreground text-center font-body mb-6">
-                Tell us a bit about yourself to get started
-              </p>
-
-              {error && (
-                <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>
-              )}
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName" className="font-body">First Name *</Label>
-                  <Input id="firstName" type="text" autoFocus placeholder="e.g. James" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="h-12 font-body" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="surname" className="font-body">Surname *</Label>
-                  <Input id="surname" type="text" placeholder="e.g. Kamau" value={surname} onChange={(e) => setSurname(e.target.value)} className="h-12 font-body" />
-                </div>
-                <Button className="w-full h-12 font-body font-medium" onClick={handleSaveProfile} disabled={loading || !firstName.trim() || !surname.trim()}>
-                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Save & Continue"}
-                </Button>
-              </div>
-            </>
-          )}
-
-          {/* STEP: Set PIN */}
-          {step === "setpin" && (
-            <>
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mx-auto mb-4">
-                <KeyRound className="h-6 w-6 text-primary" />
-              </div>
-              <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">Create a PIN</h1>
-              <p className="text-sm text-muted-foreground text-center font-body mb-6">
-                Set a 4-digit PIN so you can sign in quickly next time — no code needed.
-              </p>
-
-              {error && (
-                <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>
-              )}
-
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <Label className="font-body text-center block">Choose PIN</Label>
-                  <div className="flex justify-center">
-                    <InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus>
-                      <InputOTPGroup>
-                        <InputOTPSlot index={0} />
-                        <InputOTPSlot index={1} />
-                        <InputOTPSlot index={2} />
-                        <InputOTPSlot index={3} />
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-body text-center block">Confirm PIN</Label>
-                  <div className="flex justify-center">
-                    <InputOTP maxLength={4} value={pinConfirm} onChange={setPinConfirm}>
-                      <InputOTPGroup>
-                        <InputOTPSlot index={0} />
-                        <InputOTPSlot index={1} />
-                        <InputOTPSlot index={2} />
-                        <InputOTPSlot index={3} />
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </div>
-                </div>
-                <Button className="w-full h-12 font-body font-medium" onClick={handleSetPin} disabled={loading || pinCode.length < 4 || pinConfirm.length < 4}>
-                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Set PIN & Continue"}
-                </Button>
-              </div>
-            </>
-          )}
 
         </div>
       </div>
