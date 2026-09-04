@@ -7,19 +7,52 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS listings (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), seller_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', price NUMERIC(14,2) NOT NULL CHECK(price>=0),
- status TEXT NOT NULL DEFAULT 'active' CHECK(status IN('draft','active','sold','archived')),
+ status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN('draft','pending','approved','active','sold','rejected','archived')),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS detail_requests (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
  buyer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, message TEXT NOT NULL DEFAULT '',
- created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+ status TEXT NOT NULL DEFAULT 'pending_payment',
+ payment_status TEXT NOT NULL DEFAULT 'unpaid',
+ amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+ mpesa_receipt TEXT,
+ checkout_request_id TEXT,
+ seller_response TEXT,
+ rejection_reason TEXT,
+ responded_at TIMESTAMPTZ,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS payment_events (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), provider TEXT NOT NULL, payload JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS listings_seller_idx ON listings(seller_id);
 CREATE INDEX IF NOT EXISTS listings_status_idx ON listings(status);
+ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_status_check;
+ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK(status IN('draft','pending','approved','active','sold','rejected','archived'));
+
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_payment';
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid';
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS mpesa_receipt TEXT;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS checkout_request_id TEXT;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS seller_response TEXT;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS admin_response TEXT;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS response_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS responded_at TIMESTAMPTZ;
+ALTER TABLE detail_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE detail_requests DROP CONSTRAINT IF EXISTS detail_requests_status_check;
+ALTER TABLE detail_requests ADD CONSTRAINT detail_requests_status_check CHECK(status IN('pending_payment','paid','pending_approval','approved','responded','rejected'));
+ALTER TABLE detail_requests DROP CONSTRAINT IF EXISTS detail_requests_payment_status_check;
+ALTER TABLE detail_requests ADD CONSTRAINT detail_requests_payment_status_check CHECK(payment_status IN('unpaid','pending','paid','failed'));
+CREATE UNIQUE INDEX IF NOT EXISTS detail_requests_checkout_idx ON detail_requests(checkout_request_id) WHERE checkout_request_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS detail_requests_buyer_idx ON detail_requests(buyer_id,created_at DESC);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS name_locked BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+
 
 -- Latielle phone authentication and generic application records
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT UNIQUE;
@@ -68,6 +101,13 @@ CREATE INDEX IF NOT EXISTS entity_records_data_idx ON entity_records USING GIN(d
 
 ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_status_check;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid';
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS payment_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS mpesa_receipt TEXT;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS checkout_request_id TEXT;
+ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_payment_status_check;
+ALTER TABLE listings ADD CONSTRAINT listings_payment_status_check CHECK(payment_status IN('unpaid','pending','paid','failed'));
+CREATE UNIQUE INDEX IF NOT EXISTS listings_checkout_idx ON listings(checkout_request_id) WHERE checkout_request_id IS NOT NULL;
 
 
 CREATE TABLE IF NOT EXISTS pending_registrations (
@@ -75,6 +115,7 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
  phone TEXT NOT NULL UNIQUE,
  role TEXT NOT NULL DEFAULT 'buyer' CHECK(role IN('buyer','seller','admin')),
  pin_hash TEXT NOT NULL,
+ name TEXT NOT NULL DEFAULT '',
  merchant_request_id TEXT,
  checkout_request_id TEXT,
  amount NUMERIC(12,2) NOT NULL DEFAULT 100,
@@ -84,6 +125,7 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
 ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS result_description TEXT;
 ALTER TABLE pending_registrations DROP CONSTRAINT IF EXISTS pending_registrations_role_check;
 ALTER TABLE pending_registrations ADD CONSTRAINT pending_registrations_role_check CHECK(role IN('buyer','seller','admin'));
