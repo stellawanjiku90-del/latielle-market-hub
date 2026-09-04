@@ -55,7 +55,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 
 
 -- Latielle phone authentication and generic application records
-ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+-- A person may hold one buyer account and one seller account on the same phone.
+-- Keep role as part of the account identity instead of globally unique phone numbers.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_phone_key;
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone_role_unique_idx ON users(phone, role);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS favorites JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
@@ -112,7 +116,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS listings_checkout_idx ON listings(checkout_req
 
 CREATE TABLE IF NOT EXISTS pending_registrations (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- phone TEXT NOT NULL UNIQUE,
+ phone TEXT NOT NULL,
  role TEXT NOT NULL DEFAULT 'buyer' CHECK(role IN('buyer','seller','admin')),
  pin_hash TEXT NOT NULL,
  name TEXT NOT NULL DEFAULT '',
@@ -127,6 +131,8 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
 );
 ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
 ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS result_description TEXT;
+ALTER TABLE pending_registrations DROP CONSTRAINT IF EXISTS pending_registrations_phone_key;
+CREATE UNIQUE INDEX IF NOT EXISTS pending_registrations_phone_role_unique_idx ON pending_registrations(phone, role);
 ALTER TABLE pending_registrations DROP CONSTRAINT IF EXISTS pending_registrations_role_check;
 ALTER TABLE pending_registrations ADD CONSTRAINT pending_registrations_role_check CHECK(role IN('buyer','seller','admin'));
 CREATE INDEX IF NOT EXISTS pending_reg_checkout_idx ON pending_registrations(checkout_request_id);
