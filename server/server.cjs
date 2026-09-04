@@ -1,4 +1,4 @@
-require('dotenv').config();
+try { require('dotenv').config(); } catch (_) {}
 
 const path = require('path');
 const express = require('express');
@@ -25,10 +25,9 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET is required');
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
+if (!process.env.JWT_SECRET) {
+  console.warn('JWT_SECRET is not configured. A temporary secret is being used for this process; set JWT_SECRET in Render for persistent authentication.');
 }
 
 const SUPPORT_EMAIL = process.env.SUPPORT_NOTIFICATION_EMAIL || 'realityofafrica2023@gmail.com';
@@ -148,7 +147,10 @@ const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://
   .split(',').map((value) => value.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true);
+    const requestOrigin = `${process.env.RENDER_EXTERNAL_URL || ''}`.replace(/\/$/, '');
+    const hostOrigin = `http${process.env.NODE_ENV === 'production' ? 's' : ''}://${String(process.env.RENDER_EXTERNAL_HOSTNAME || '').trim()}`.replace(/\/$/, '');
+    if (allowedOrigins.includes(origin) || (requestOrigin && origin === requestOrigin) || (hostOrigin && origin === hostOrigin)) return callback(null, true);
     return callback(new Error('Origin not allowed'));
   },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -291,22 +293,23 @@ app.get('/api/uploads/:id', optionalAuth, async (req, res, next) => {
 ===================================================== */
 
 app.get('/api/health', async (_req, res) => {
+  let database = false;
   try {
     await db.query('SELECT 1');
-
-    res.json({
-      ok: true,
-      database: true,
-      ai: Boolean(process.env.OPENAI_API_KEY),
-      email: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
-    });
+    database = true;
   } catch (error) {
-    res.status(503).json({
-      ok: false,
-      database: false,
-      error: process.env.NODE_ENV === 'production' ? 'Service unavailable' : error.message,
-    });
+    console.warn('Health check: database unavailable:', error?.message || error);
   }
+
+  // Render should use this endpoint to verify that the web process is alive.
+  // Database/API integrations are reported separately and must not make the
+  // frontend unreachable during a temporary database outage.
+  res.status(200).json({
+    ok: true,
+    database,
+    ai: Boolean(process.env.OPENAI_API_KEY),
+    email: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
+  });
 });
 
 /* =====================================================
