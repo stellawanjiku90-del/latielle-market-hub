@@ -63,11 +63,14 @@ export default function HelpChatWidget() {
     setLoading(true);
 
     try {
-      const response = await api.integrations.Core.InvokeLLM({
-        input: history.slice(-12).map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
+      const response = await api.request("/api/ai", {
+        method: "POST",
+        body: JSON.stringify({
+          input: history.slice(-12).map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+        }),
       });
 
       const answer = response?.answer || response?.output_text || "I couldn’t answer that just now. You can use “Talk to a person” below.";
@@ -75,7 +78,11 @@ export default function HelpChatWidget() {
     } catch (error) {
       const message = error?.status === 429
         ? "There have been a few chat requests in a short time. Please wait a moment and try again."
-        : `I can’t reach the support service right now. You can use “Talk to a person” below or email ${SUPPORT_EMAIL}.`;
+        : error?.status === 503
+          ? "LATIELLE Support is not connected right now. Please use “Talk to a person” below while the support connection is restored."
+          : error?.status === 504
+            ? "Support is taking longer than expected. Please try your question again."
+            : `I can’t reach the support service right now. You can use “Talk to a person” below or email ${SUPPORT_EMAIL}.`;
       setMessages((prev) => [...prev, { role: "assistant", content: message }]);
     } finally {
       setLoading(false);

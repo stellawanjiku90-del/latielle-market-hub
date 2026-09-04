@@ -57,7 +57,7 @@ export default function GlobalHeader() {
                 <ArrowLeft className="h-5 w-5 text-white" />
               </button>
             )}
-            <Link to="/" className="flex items-center gap-2 select-none">
+            <Link to={user ? getDashboardPath() : "/"} className="flex items-center gap-2 select-none">
               <Shield className="h-7 w-7 text-primary" />
               <span className="font-heading text-xl font-bold text-white hidden sm:inline">LATIELLE MARKET HUB</span>
               <span className="font-heading text-base font-bold text-white sm:hidden">LATIELLE</span>
