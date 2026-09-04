@@ -1,6 +1,7 @@
-# Render build fix
+# Render build
 
-Restored `src/components/Layout.jsx` and the complete frontend source structure.
+Use the build command that matches the current dependency manifest:
 
-Render build command:
-`npm install && npm run build`
+`npm install --include=dev --no-audit --no-fund && npm run build`
+
+The repository intentionally does not carry a stale package-lock.json. Render generates a fresh lock during `npm install`, avoiding the previous `npm ci` package-sync failure.
