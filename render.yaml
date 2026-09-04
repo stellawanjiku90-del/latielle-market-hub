@@ -2,7 +2,7 @@ services:
   - type: web
     name: latielle-market-hub
     runtime: node
-    buildCommand: npm ci --include=dev && npm run build
+    buildCommand: npm install --include=dev --no-audit --no-fund && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
