@@ -1,6 +1,6 @@
 # KSh 100 M-Pesa Registration Verification
 
-New buyer/seller signup requires a one-time KSh 100 M-Pesa STK Push. No Twilio is used.
+New buyer/seller signup requires a one-time KSh 100 M-Pesa STK Push. No Twilio is used in the production runtime.
 
 Required Render variables:
 - DATABASE_URL
