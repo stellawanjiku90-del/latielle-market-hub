@@ -20,7 +20,15 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (getSession()) return <Navigate to="/" replace />;
+  const existingSession = getSession();
+  if (existingSession) {
+    const destination = existingSession.role === "admin"
+      ? "/admin"
+      : existingSession.role === "seller"
+        ? "/seller-dashboard"
+        : "/buyer-dashboard";
+    return <Navigate to={destination} replace />;
+  }
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
