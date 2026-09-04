@@ -1,4 +1,4 @@
-const CACHE_NAME = "latielle-market-hub-v5";
+const CACHE_NAME = "latielle-market-hub-v4";
 const APP_SHELL = ["/", "/site.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
