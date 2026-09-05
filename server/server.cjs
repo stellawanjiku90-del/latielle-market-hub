@@ -25,10 +25,10 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
-if (!process.env.JWT_SECRET) {
-  console.warn('JWT_SECRET is not configured. A temporary secret is being used for this process; set JWT_SECRET in Render for persistent authentication.');
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured in production.');
 }
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
 
 const SUPPORT_EMAIL = process.env.SUPPORT_NOTIFICATION_EMAIL || 'realityofafrica2023@gmail.com';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
@@ -43,7 +43,6 @@ Answer questions about LATIELLE MARKET HUB using only the facts below. Write lik
 
 Platform facts:
 - LATIELLE MARKET HUB helps people discover established businesses listed for sale across Kenya's 47 counties.
-- The platform figures supplied by the business are 10,000+ established businesses and 1,000,000+ buyers.
 - Visitors can browse listings and search by business, category or location.
 - Sellers can create listings and provide business information, photos and supporting documents.
 - Account registration uses a phone number and a 4-digit PIN. The current registration verification payment is KSh 100 through M-Pesa STK Push.
@@ -317,7 +316,7 @@ app.get('/api/health', async (_req, res) => {
    AUTHENTICATION
 ===================================================== */
 
-app.post('/api/auth/register', async (req, res, next) => {
+app.post('/api/auth/register', sensitiveRateLimit, async (req, res, next) => {
   try {
     const {
       name,
@@ -376,7 +375,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res, next) => {
+app.post('/api/auth/login', sensitiveRateLimit, async (req, res, next) => {
   try {
     const {
       email,
@@ -838,7 +837,6 @@ function phoneUser(row) {
 
 app.post('/api/auth/register-payment', sensitiveRateLimit, async (req, res, next) => {
   try {
-    console.log('Public registration payment request received');
     const phone = normalizePhone(req.body.phone);
     const role = ['buyer', 'seller'].includes(req.body.role) ? req.body.role : 'buyer';
     const pin = String(req.body.pin || '');
@@ -884,14 +882,13 @@ app.post('/api/auth/register-payment', sensitiveRateLimit, async (req, res, next
     if (!response.ok || data.ResponseCode !== '0') {
       console.error('M-Pesa STK push rejected', { status: response.status, response: data });
       return res.status(502).json({
-        error: data.errorMessage || data.ResponseDescription || data.error || `M-Pesa STK Push failed (${response.status}). Check Render logs for the Daraja response.`,
-        providerStatus: response.status,
+        error: 'M-Pesa payment request could not be started. Please try again in a moment.',
       });
     }
 
     if (!data.CheckoutRequestID) {
       console.error('M-Pesa STK response missing CheckoutRequestID', { response: data });
-      return res.status(502).json({ error: 'M-Pesa accepted the request without a checkout ID. Please check Render logs.' });
+      return res.status(502).json({ error: 'M-Pesa payment request could not be started. Please try again.' });
     }
 
     console.log('M-Pesa STK accepted', {
@@ -1215,8 +1212,10 @@ app.get('/api/entities/:entity/:id', optionalAuth, async(req,res,next)=>{
   const r=await db.query(`SELECT id,data,created_at,updated_at FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]);
   if(!r.rows[0]) return res.status(404).json({error:'Not found'});
   if(!isAdmin(req)){
-    const d=r.rows[0].data||{}; const identifier=req.user.phone||req.user.email||req.user.id;
-    const owned=[d.user_email,d.buyer_email,d.seller_email,d.recipient_email,d.user_id].filter(Boolean).includes(identifier);
+    const d=r.rows[0].data||{};
+    const owner = (await db.query('SELECT phone,email FROM users WHERE id=$1',[req.user.id])).rows[0];
+    const identities=[owner?.phone,owner?.email,req.user.id].filter(Boolean).map(String);
+    const owned=[d.user_email,d.buyer_email,d.seller_email,d.recipient_email,d.user_id].filter(Boolean).some((value) => identities.includes(String(value)));
     if(!owned) return res.status(403).json({error:'Forbidden'});
   }
   res.json({id:r.rows[0].id,created_date:r.rows[0].created_at,...r.rows[0].data});
@@ -1297,8 +1296,10 @@ app.patch('/api/entities/:entity/:id', auth(), async(req,res,next)=>{
   }
   if(!isAdmin(req)){
     const old=await db.query(`SELECT data FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]); if(!old.rows[0])return res.status(404).json({error:'Not found'});
-    const data=old.rows[0].data||{}; const identifier=req.user.phone||req.user.email||req.user.id;
-    if(![data.user_email,data.buyer_email,data.seller_email,data.recipient_email,data.user_id].filter(Boolean).includes(identifier)) return res.status(403).json({error:'Forbidden'});
+    const data=old.rows[0].data||{};
+    const owner=(await db.query('SELECT phone,email FROM users WHERE id=$1',[req.user.id])).rows[0];
+    const identities=[owner?.phone,owner?.email,req.user.id].filter(Boolean).map(String);
+    if(![data.user_email,data.buyer_email,data.seller_email,data.recipient_email,data.user_id].filter(Boolean).some((value) => identities.includes(String(value)))) return res.status(403).json({error:'Forbidden'});
   }
   const old=await db.query(`SELECT data FROM entity_records WHERE entity_name=$1 AND id=$2`,[n,id]); if(!old.rows[0])return res.status(404).json({error:'Not found'}); const merged={...old.rows[0].data,...d}; const r=await db.query(`UPDATE entity_records SET data=$3,updated_at=NOW() WHERE entity_name=$1 AND id=$2 RETURNING *`,[n,id,JSON.stringify(merged)]);res.json({id,...merged});
  }catch(e){next(e)}
@@ -1388,7 +1389,7 @@ app.post('/api/functions/:name', optionalAuth, sensitiveRateLimit, async(req,res
       return res.status(502).json({success:false, emailSent:false, error:'Support notification could not be sent.'});
     }
   }
-  if(n==='createNotification'||n.startsWith('notify')) return res.json({success:true});
+  if(n==='createNotification'||n==='notifyAdminSupportRequest'||n==='notifyBuyerResponse'||n==='notifySellerOnRequest'||n==='notifyBuyers') return res.json({success:true});
   if(n==='checkPaymentStatus') return res.json({success:true,status:'pending'});
   return res.status(404).json({error:`Unknown function: ${n}`});
  }catch(e){next(e)}
@@ -1397,7 +1398,7 @@ app.post('/api/functions/:name', optionalAuth, sensitiveRateLimit, async(req,res
 /* =====================================================
    SUPPORT / AI / EMAIL
 ===================================================== */
-app.post('/api/support/human-request', optionalAuth, async (req, res, next) => {
+app.post('/api/support/human-request', optionalAuth, sensitiveRateLimit, async (req, res, next) => {
   try {
     const name = String(req.body?.name || req.user?.name || '').trim().slice(0, 120);
     const email = String(req.body?.email || req.user?.email || '').trim().toLowerCase();
@@ -1430,7 +1431,7 @@ app.post('/api/support/human-request', optionalAuth, async (req, res, next) => {
   }
 });
 
-app.post('/api/email', auth(), async (req,res,next)=>{
+app.post('/api/email', auth(), sensitiveRateLimit, async (req,res,next)=>{
   try {
     if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return res.status(503).json({success:false,error:'Email service is not configured.'});
     const payload = req.body || {};
