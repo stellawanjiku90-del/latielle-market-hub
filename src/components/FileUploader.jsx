@@ -42,6 +42,7 @@ function fileNameFromUrl(url) {
 
 export default function FileUploader({ label, accept, multiple = false, value = [], onChange, hint, onUploadingChange, kind = "document" }) {
   const [uploading, setUploading] = useState(0);
+  const [uploadingUrls, setUploadingUrls] = useState({});
   const [preview, setPreview] = useState(null);
   const [previews, setPreviews] = useState({});
   const inputRef = useRef(null);
@@ -92,6 +93,7 @@ export default function FileUploader({ label, accept, multiple = false, value = 
 
   const uploadOne = async (file, localUrl) => {
     setUploadState(1);
+    setUploadingUrls((current) => ({ ...current, [localUrl]: true }));
     try {
       let fileToUpload = file;
       if (isImageFile(file)) fileToUpload = await enhanceImage(file);
@@ -112,6 +114,7 @@ export default function FileUploader({ label, accept, multiple = false, value = 
       toast.error(error?.message || "The file could not be uploaded. Please try again.");
       return false;
     } finally {
+      setUploadingUrls((current) => { const next = { ...current }; delete next[localUrl]; return next; });
       setUploadState(-1);
     }
   };
@@ -180,7 +183,7 @@ export default function FileUploader({ label, accept, multiple = false, value = 
                   </button>
                 )}
                 <div className="absolute left-2 bottom-2 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium text-foreground shadow-sm">
-                  {previews[url]?.startsWith("blob:") ? "Preview ready" : "Uploaded"}
+                  {uploadingUrls[url] ? "Uploading…" : previews[url]?.startsWith("blob:") ? "Preview ready" : "Uploaded"}
                 </div>
                 <button type="button" onClick={() => remove(url)} aria-label={`Remove ${label || "file"}`} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/95 text-foreground shadow flex items-center justify-center hover:bg-destructive hover:text-white transition-colors">
                   <X className="h-4 w-4" />
@@ -194,15 +197,13 @@ export default function FileUploader({ label, accept, multiple = false, value = 
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        disabled={uploading > 0}
         className={cn(
           "flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground font-body",
-          "hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors w-full justify-center",
-          uploading > 0 && "opacity-70 cursor-wait"
+          "hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors w-full justify-center"
         )}
       >
         {uploading > 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-        {uploading > 0 ? "Uploading in the background…" : `Add ${multiple ? "files" : "file"}`}
+        {uploading > 0 ? `Uploading in the background — add ${multiple ? "more files" : "another file"}` : `Add ${multiple ? "files" : "file"}`}
       </button>
 
       <input ref={inputRef} type="file" accept={accept} multiple={multiple} className="hidden" onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
