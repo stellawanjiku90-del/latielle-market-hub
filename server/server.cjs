@@ -1,12 +1,15 @@
 try { require('dotenv').config(); } catch (_) {}
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('./db.cjs');
+let webpush = null;
+try { webpush = require('web-push'); } catch (_) {}
 
 const app = express();
 app.set('trust proxy', 1);
@@ -37,6 +40,69 @@ const aiRateWindow = new Map();
 const OPENAI_TIMEOUT_MS = 25_000;
 const DETAIL_REQUEST_FEE = 1000;
 const ADMIN_PHONES = new Set(['+254703927978', '+254706692111']);
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:realityofafrica2023@gmail.com';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+
+function webPushReady() {
+  return Boolean(webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+}
+if (webPushReady()) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  } catch (error) {
+    console.error('Invalid Web Push VAPID configuration:', error?.message || error);
+    webpush = null;
+  }
+}
+
+async function sendPushToUsers(userIds, payload) {
+  if (!webPushReady() || !Array.isArray(userIds) || !userIds.length) return { sent: 0, removed: 0 };
+  const rows = (await db.query(
+    `SELECT id,user_id,subscription FROM push_subscriptions WHERE user_id = ANY($1::uuid[])`,
+    [userIds]
+  )).rows;
+  let sent = 0, removed = 0;
+  for (const row of rows) {
+    try {
+      const subscription = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
+      await webpush.sendNotification(subscription, JSON.stringify(payload));
+      sent++;
+    } catch (error) {
+      const status = Number(error?.statusCode || 0);
+      if (status === 404 || status === 410) {
+        await db.query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
+        removed++;
+      } else {
+        console.warn('Push notification failed', { subscriptionId: row.id, status, message: error?.message });
+      }
+    }
+  }
+  return { sent, removed };
+}
+
+async function notifyAllBuyers({ title, body, link, type }) {
+  const buyers = (await db.query(
+    `SELECT id,phone FROM users WHERE role='buyer' AND phone IS NOT NULL AND phone <> ''`
+  )).rows;
+  if (!buyers.length) return { buyers: 0, sent: 0 };
+  const values = [];
+  const placeholders = buyers.map((buyer, index) => {
+    values.push('Notification', JSON.stringify({
+      recipient: buyer.phone,
+      type: type || 'general',
+      title: String(title || '').slice(0, 160),
+      body: String(body || '').slice(0, 1000),
+      link: link || '',
+      is_read: false,
+    }));
+    return `($${index * 2 + 1},$${index * 2 + 2})`;
+  }).join(',');
+  await db.query(`INSERT INTO entity_records(entity_name,data) VALUES ${placeholders}`, values);
+  const push = await sendPushToUsers(buyers.map((buyer) => buyer.id), { title, body, link: link || '/' });
+  return { buyers: buyers.length, ...push };
+}
+
 
 const OPENAI_INSTRUCTIONS = `You are the customer support assistant for LATIELLE MARKET HUB, a Kenyan marketplace for buying and selling established businesses across Kenya.
 
@@ -143,8 +209,11 @@ async function sendSupportEmail({ name, email, message, conversation }) {
   return true;
 }
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:4173')
-  .split(',').map((value) => value.trim()).filter(Boolean);
+const allowedOrigins = [
+  ...(process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:4173').split(','),
+  'https://latiellemarkethub.co.ke',
+  'https://www.latiellemarkethub.co.ke',
+].map((value) => value.trim().replace(/\/$/, '')).filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
@@ -288,6 +357,41 @@ app.get('/api/uploads/:id', optionalAuth, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+/* =====================================================
+   WEB PUSH NOTIFICATIONS
+===================================================== */
+
+app.get('/api/push/public-key', auth(['buyer']), async (_req, res) => {
+  if (!webPushReady()) return res.status(503).json({ error: 'Push notifications are not configured yet.' });
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', auth(['buyer']), async (req, res, next) => {
+  try {
+    if (!webPushReady()) return res.status(503).json({ error: 'Push notifications are not configured yet.' });
+    const subscription = req.body?.subscription;
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return res.status(400).json({ error: 'A valid push subscription is required.' });
+    }
+    await db.query(
+      `INSERT INTO push_subscriptions(user_id,endpoint,subscription)
+       VALUES($1,$2,$3::jsonb)
+       ON CONFLICT(endpoint) DO UPDATE SET user_id=EXCLUDED.user_id,subscription=EXCLUDED.subscription,updated_at=NOW()`,
+      [req.user.id, String(subscription.endpoint).slice(0, 2000), JSON.stringify(subscription)]
+    );
+    res.json({ success: true });
+  } catch (error) { next(error); }
+});
+
+app.delete('/api/push/subscribe', auth(['buyer']), async (req, res, next) => {
+  try {
+    const endpoint = String(req.body?.endpoint || '').slice(0, 2000);
+    if (endpoint) await db.query('DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2', [req.user.id, endpoint]);
+    else await db.query('DELETE FROM push_subscriptions WHERE user_id=$1', [req.user.id]);
+    res.json({ success: true });
+  } catch (error) { next(error); }
 });
 
 /* =====================================================
@@ -1263,6 +1367,14 @@ app.post('/api/entities/:entity', auth(), async(req,res,next)=>{
     const listingFees = { basic: 2000, featured: 3000, premium: 4000 };
     const listingFee = listingFees[d.listing_type] || 2000;
     const r=await db.query(`INSERT INTO listings(seller_id,title,description,price,status,metadata,payment_status,payment_amount) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,[req.user.id,d.title,d.description,Number(d.price)||0,safeStatus,JSON.stringify(metadata),adminBypass?'paid':'unpaid',adminBypass?0:listingFee]);
+    if (['approved','active'].includes(safeStatus)) {
+      notifyAllBuyers({
+        title: 'New business available',
+        body: `${String(d.title).slice(0, 100)} is now available on LATIELLE MARKET HUB.`,
+        link: `/listing/${r.rows[0].id}`,
+        type: 'new_business',
+      }).catch((error) => console.error('New-business notification failed', error));
+    }
     return res.status(201).json(publicEntity(n,r.rows[0],{includePrivate:true}));
   }
   if(n==='DetailRequest') return res.status(405).json({error:'Use the request payment flow to create a detail request.'});
@@ -1298,6 +1410,15 @@ app.patch('/api/entities/:entity/:id', auth(), async(req,res,next)=>{
     if(req.user.role!=='admin' && d.status!==undefined) return res.status(403).json({error:'Only the admin team can change listing approval status.'});
     const metadata={...d}; for(const k of ['title','description','price','status']) delete metadata[k];
     const r=await db.query(`UPDATE listings SET title=COALESCE($2,title),description=COALESCE($3,description),price=COALESCE($4,price),status=COALESCE($5,status),metadata=metadata || COALESCE($6,'{}'::jsonb),updated_at=NOW() WHERE id=$1 RETURNING *`,[id,d.title,d.description,d.price,d.status,JSON.stringify(metadata)]);
+    const changedToLive = !['approved','active'].includes(existing.status) && ['approved','active'].includes(r.rows[0].status);
+    if (changedToLive) {
+      notifyAllBuyers({
+        title: 'New business available',
+        body: `${String(r.rows[0].title).slice(0, 100)} is now available on LATIELLE MARKET HUB.`,
+        link: `/listing/${r.rows[0].id}`,
+        type: 'new_business',
+      }).catch((error) => console.error('New-business notification failed', error));
+    }
     return res.json(publicEntity(n,r.rows[0],{includePrivate:true}));
   }
   if(n==='PhoneUser'||n==='User') {
@@ -1360,6 +1481,12 @@ app.post('/api/admin/listings/:id/mark-sold', auth(['admin']), async (req, res, 
        RETURNING *`,
       [id, soldPrice]
     )).rows[0];
+    notifyAllBuyers({
+      title: 'Business marked as sold',
+      body: `${String(updated.title).slice(0, 100)} has been marked as sold.`,
+      link: '/sold-businesses',
+      type: 'business_sold',
+    }).catch((error) => console.error('Sold-business notification failed', error));
     return res.json({ success: true, listing: publicEntity('BusinessListing', updated, { includePrivate: true }) });
   } catch (e) { next(e); }
 });
@@ -1602,9 +1729,21 @@ app.post('/api/auth/reset-password', async (_req,res)=>res.status(400).json({err
 // still be cached normally.
 const distPath = path.join(__dirname, '..', 'dist');
 const distIndex = path.join(distPath, 'index.html');
+app.get('/assets/:filename', (req, res, next) => {
+  const filename = path.basename(String(req.params.filename || ''));
+  const assetPath = path.join(distPath, 'assets', filename);
+  if (!filename || !fs.existsSync(assetPath)) {
+    return res.status(404).type('text/plain').send('Frontend asset not found. A fresh deployment is required.');
+  }
+  if (filename.endsWith('.css')) res.type('text/css');
+  else if (filename.endsWith('.js') || filename.endsWith('.mjs')) res.type('application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.sendFile(assetPath, (error) => error && next(error));
+});
 app.use('/assets', express.static(path.join(distPath, 'assets'), {
   immutable: true,
   maxAge: '1y',
+  fallthrough: false,
 }));
 app.get('/favicon.svg', (req, res) => res.sendFile(path.join(distPath, 'favicon.svg')));
 app.get('/site.webmanifest', (req, res) => {
@@ -1649,7 +1788,17 @@ app.use((error, req, res, _next) => {
 async function startServer() {
   // Bind the HTTP port first so Render can reach the frontend even if the
   // database is temporarily unavailable during a deploy/restart.
-  app.listen(PORT, () => console.log(`Latielle Market Hub listening on ${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`Latielle Market Hub listening on ${PORT}`);
+    if (!fs.existsSync(distIndex)) {
+      console.error(`Production frontend missing: ${distIndex}. Render must run npm run build before npm start.`);
+    } else {
+      const assetsDir = path.join(distPath, 'assets');
+      const assetCount = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir).length : 0;
+      console.log(`Production frontend ready. dist/assets contains ${assetCount} asset file(s).`);
+    }
+    console.log(`Web Push notifications: ${webPushReady() ? 'configured' : 'not configured'}`);
+  });
 
   const fs = require('fs');
   const schemaPath = path.join(__dirname, '..', 'data', 'schema.sql');
