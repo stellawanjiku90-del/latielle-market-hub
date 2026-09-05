@@ -36,7 +36,7 @@ const OPENAI_FALLBACK_MODEL = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini';
 const aiRateWindow = new Map();
 const OPENAI_TIMEOUT_MS = 25_000;
 const DETAIL_REQUEST_FEE = 1000;
-const ADMIN_PHONES = new Set(String(process.env.ADMIN_PHONES || '+254703927978,+254706692111').split(',').map(normalizePhone).filter(Boolean));
+const ADMIN_PHONES = new Set(['+254703927978', '+254706692111']);
 
 const OPENAI_INSTRUCTIONS = `You are the customer support assistant for LATIELLE MARKET HUB, a Kenyan marketplace for buying and selling established businesses across Kenya.
 
