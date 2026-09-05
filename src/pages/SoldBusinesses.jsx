@@ -30,22 +30,11 @@ export default function SoldBusinesses() {
     const init = async () => {
       let soldListings = await api.entities.BusinessListing.filter({ status: "sold" }, "-sold_at", 100);
 
-      // Auto-cleanup: delete listings sold more than SOLD_EXPIRY_DAYS ago
-      const expired = soldListings.filter(l => daysSince(l.sold_at) > SOLD_EXPIRY_DAYS);
-      for (const l of expired) {
-        await api.entities.BusinessListing.delete(l.id);
-      }
-
-      // Keep latest records only if exceeds MAX
-      soldListings = soldListings.filter(l => daysSince(l.sold_at) <= SOLD_EXPIRY_DAYS);
-      if (soldListings.length > MAX_SOLD_RECORDS) {
-        const toDelete = soldListings.slice(MAX_SOLD_RECORDS);
-        for (const l of toDelete) {
-          await api.entities.BusinessListing.delete(l.id);
-        }
-        soldListings = soldListings.slice(0, MAX_SOLD_RECORDS);
-      }
-
+      // The public sold archive is read-only. Do not let a guest page delete
+      // marketplace records as a side effect of loading the page.
+      soldListings = soldListings
+        .filter(l => !l.sold_at || daysSince(l.sold_at) <= SOLD_EXPIRY_DAYS)
+        .slice(0, MAX_SOLD_RECORDS);
       setSold(soldListings);
       setLoading(false);
     };

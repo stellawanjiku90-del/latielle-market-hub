@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Users, Store, CreditCard, Flag, CheckCircle, XCircle, Clock, BadgeCheck, MessageSquare, ChevronDown, ChevronUp, FileText, Send, Eye } from "lucide-react";
+import { Users, Store, CreditCard, Flag, CheckCircle, XCircle, Clock, BadgeCheck, MessageSquare, ChevronDown, ChevronUp, FileText, Send, Eye, Tag } from "lucide-react";
 import { toast } from "sonner";
 import ViewCount from "../components/ViewCount";
 import BuyerSellerChat from "../components/BuyerSellerChat";
@@ -53,7 +53,7 @@ export default function AdminDashboard() {
         api.entities.SupportRequest.list("-created_date", 100),
         api.entities.DetailRequest.list("-created_date", 100),
       ]);
-      setUsers(u); setListings(l.filter(x => x.payment_status === "paid" || ["approved","active","sold","rejected"].includes(x.status))); setTransactions(t); setReports(r); setConversations(c); setSupportRequests(s);
+      setUsers(u); setListings(l); setTransactions(t); setReports(r); setConversations(c); setSupportRequests(s);
       // Only show requests where the buyer has actually paid (not abandoned/unpaid)
       setDetailRequests(dr.filter(d => d.status !== "pending_payment"));
       setLoading(false);
@@ -86,6 +86,36 @@ export default function AdminDashboard() {
       setListings(prev => prev.map(l => l.id === id ? { ...l, status: "pending" } : l));
       toast.error("Action failed. Please try again.");
     });
+  };
+
+  const handleMarkSold = async (id, soldPrice) => {
+    const previous = listings.find(l => l.id === id);
+    setListings(prev => prev.map(l => l.id === id ? { ...l, status: "sold", sold_price: soldPrice ?? null, sold_at: new Date().toISOString() } : l));
+    setReviewListing(null);
+    try {
+      const result = await api.request(`/api/admin/listings/${encodeURIComponent(id)}/mark-sold`, {
+        method: "POST",
+        body: JSON.stringify({ sold_price: soldPrice === "" || soldPrice == null ? null : Number(soldPrice) }),
+      });
+      if (result?.listing) setListings(prev => prev.map(l => l.id === id ? result.listing : l));
+      toast.success("Business marked as sold");
+    } catch {
+      setListings(prev => prev.map(l => l.id === id ? previous : l));
+      toast.error("We could not mark this business as sold. Please try again.");
+    }
+  };
+
+  const handleRestoreListing = async (id) => {
+    const previous = listings.find(l => l.id === id);
+    setListings(prev => prev.map(l => l.id === id ? { ...l, status: l.payment_status === "paid" ? "approved" : "draft", sold_price: null, sold_at: null } : l));
+    try {
+      const result = await api.request(`/api/admin/listings/${encodeURIComponent(id)}/restore`, { method: "POST" });
+      if (result?.listing) setListings(prev => prev.map(l => l.id === id ? result.listing : l));
+      toast.success("Listing restored to the marketplace");
+    } catch {
+      setListings(prev => prev.map(l => l.id === id ? previous : l));
+      toast.error("We could not restore this listing. Please try again.");
+    }
   };
 
   const handleApproveRequest = async (id) => {
@@ -243,6 +273,12 @@ export default function AdminDashboard() {
                     </Button>
                   {l.status === "pending" && (
                     <Button size="sm" className="text-xs gap-1 shrink-0" onClick={() => setReviewListing(l)}><FileText className="h-3 w-3" />Review</Button>
+                  )}
+                  {(l.status === "approved" || l.status === "active") && (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 shrink-0" onClick={() => setReviewListing(l)}><Tag className="h-3 w-3" />Manage</Button>
+                  )}
+                  {l.status === "sold" && (
+                    <Button size="sm" variant="outline" className="text-xs gap-1 shrink-0" onClick={() => handleRestoreListing(l.id)}><Store className="h-3 w-3" />Restore</Button>
                   )}
                   </div>
                 </CardContent></Card>
@@ -469,6 +505,8 @@ export default function AdminDashboard() {
         listing={reviewListing}
         onApprove={handleApprove}
         onReject={handleReject}
+        onMarkSold={handleMarkSold}
+        onRestore={handleRestoreListing}
       />
 
       <BuyerRequestReviewModal

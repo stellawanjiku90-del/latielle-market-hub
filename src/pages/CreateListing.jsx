@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiFunction } from "@/api/apiClient";
 import { getSession, redirectToLogin } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -94,7 +94,11 @@ const LISTING_FEES = { basic: 2000, featured: 3000, premium: 4000 };
 
 export default function CreateListing() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resumeListingId = searchParams.get("listingId");
   const [user, setUser] = useState(null);
+  const [existingListingId, setExistingListingId] = useState(resumeListingId || null);
+  const [loadingExisting, setLoadingExisting] = useState(Boolean(resumeListingId));
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [paymentPhone, setPaymentPhone] = useState("");
@@ -109,10 +113,39 @@ export default function CreateListing() {
 
   useEffect(() => {
     const session = getSession();
-    if (!session) { redirectToLogin("/create-listing"); return; }
+    if (!session) { redirectToLogin(resumeListingId ? `/create-listing?listingId=${encodeURIComponent(resumeListingId)}` : "/create-listing"); return; }
     setUser(session);
     if (session?.phone) setPaymentPhone(session.phone);
-  }, []);
+
+    const loadExisting = async () => {
+      if (!resumeListingId) { setLoadingExisting(false); return; }
+      try {
+        const listing = await api.entities.BusinessListing.get(resumeListingId);
+        if (!listing || listing.created_by && listing.created_by !== session.phone && listing.seller_id !== session.userId) throw new Error("Listing not found.");
+        setExistingListingId(listing.id);
+        setForm(prev => ({
+          ...prev,
+          title: listing.title || "", description: listing.description || "", category: listing.category || "",
+          county: listing.county || "", sub_county: listing.sub_county || "", town: listing.town || "",
+          asking_price: listing.asking_price ?? listing.price ?? "", years_operating: listing.years_operating ?? "",
+          employees: listing.employees ?? "", reason_for_selling: listing.reason_for_selling || "",
+          listing_type: listing.listing_type || "basic", exact_location: listing.exact_location || "",
+          location_lat: listing.location_lat ?? null, location_lng: listing.location_lng ?? null,
+          supplier_info: listing.supplier_info || "", staff_info: listing.staff_info || "", seller_phone: listing.seller_phone || session.phone || "",
+          monthly_gross_sales: listing.monthly_gross_sales || "", monthly_net_sales: listing.monthly_net_sales || "",
+          financial_records_available: listing.financial_records_available || "", photos: Array.isArray(listing.photos) ? listing.photos : [],
+          videos: Array.isArray(listing.videos) ? listing.videos : [], business_licence: Array.isArray(listing.business_licence) ? listing.business_licence : [],
+          registration_cert: Array.isArray(listing.registration_cert) ? listing.registration_cert : [], owner_id_docs: Array.isArray(listing.owner_id_docs) ? listing.owner_id_docs : [],
+        }));
+        setStep(0);
+        if (listing.seller_phone) setPaymentPhone(listing.seller_phone);
+      } catch (error) {
+        toast.error("We could not reopen that listing. Please start a new listing.");
+        setExistingListingId(null);
+      } finally { setLoadingExisting(false); }
+    };
+    loadExisting();
+  }, [resumeListingId]);
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -146,49 +179,65 @@ export default function CreateListing() {
   };
 
   const handleSubmit = async (asDraft) => {
-    if (!asDraft && !paymentPhone.trim()) {
+    if (!asDraft && user?.role !== "admin" && !paymentPhone.trim()) {
       toast.error("Please enter your M-Pesa phone number to pay the listing fee.");
       return;
     }
     if (pendingUploads > 0) {
-      toast.error("A file is still uploading. Please wait a moment for the upload to finish.");
+      toast.error("Your files are still uploading. They will finish shortly; please wait before submitting.");
       return;
     }
     setSubmitting(true);
-    const data = {
-      ...form,
-      asking_price: Number(form.asking_price) || 0,
-      monthly_gross_sales: form.monthly_gross_sales || undefined,
-      monthly_net_sales: form.monthly_net_sales || undefined,
-      years_operating: Number(form.years_operating) || 0,
-      employees: Number(form.employees) || 0,
-      exact_location: form.exact_location || [form.town, form.sub_county, form.county].filter(Boolean).join(", "),
-      status: asDraft ? "draft" : "pending",
-    };
-    const listing = await api.entities.BusinessListing.create(data);
-
-    if (!asDraft) {
-      const fee = LISTING_FEES[form.listing_type] || 2000;
-      const res = await apiFunction('mpesaStkPush', {
-        phone: paymentPhone.trim(),
-        amount: fee,
-        detailRequestId: listing.id,
-        listingTitle: `Listing Fee: ${form.title || form.category}`,
-      });
-      if (res.data?.success) {
-        toast.success(`M-Pesa prompt sent! Enter your PIN to pay KES ${fee.toLocaleString()} listing fee.`);
+    try {
+      const data = {
+        ...form,
+        asking_price: Number(form.asking_price) || 0,
+        monthly_gross_sales: form.monthly_gross_sales || undefined,
+        monthly_net_sales: form.monthly_net_sales || undefined,
+        years_operating: Number(form.years_operating) || 0,
+        employees: Number(form.employees) || 0,
+        exact_location: form.exact_location || [form.town, form.sub_county, form.county].filter(Boolean).join(", "),
+        ...(existingListingId ? {} : { status: asDraft ? "draft" : "pending" }),
+      };
+      let listing;
+      if (existingListingId) {
+        listing = await api.entities.BusinessListing.update(existingListingId, data);
       } else {
-        toast.error(res.data?.error || "Listing saved but payment prompt failed. Contact support.");
+        listing = await api.entities.BusinessListing.create(data);
+        setExistingListingId(listing.id);
       }
-    } else {
-      toast.success("Draft saved!");
-    }
 
-    navigate("/seller-dashboard");
-    setSubmitting(false);
+      if (!asDraft) {
+        try {
+          const res = await api.request(`/api/listings/${encodeURIComponent(listing.id)}/payment`, {
+            method: "POST",
+            body: JSON.stringify({ phone: paymentPhone.trim() }),
+          });
+          if (res?.success && res.payment_status === "paid") {
+            toast.success(res.bypassed ? "Listing saved. Administrator fees are waived." : "Listing payment confirmed.");
+          } else if (res?.success) {
+            const fee = Number(res.amount || LISTING_FEES[form.listing_type] || 2000);
+            toast.success(`M-Pesa prompt sent. Enter your PIN to pay KES ${fee.toLocaleString()}. Your listing is saved.`);
+          } else {
+            toast.error("Your listing is saved. You can complete the payment later from your Seller Dashboard.");
+          }
+        } catch (paymentError) {
+          // The listing has already been persisted. Never discard it just because
+          // the M-Pesa prompt could not be started. The dashboard provides retry.
+          toast.error("Your listing is saved. Payment could not be started right now; you can try again later from your Seller Dashboard.");
+        }
+      } else {
+        toast.success("Draft saved. You can continue from your Seller Dashboard.");
+      }
+      navigate("/seller-dashboard");
+    } catch (error) {
+      toast.error("We could not save your listing. Your entered information has not been submitted.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  if (!user) return null;
+  if (!user || loadingExisting) return <div className="min-h-[60vh] flex items-center justify-center"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
   return (
     <div className="pt-20 pb-16 min-h-screen bg-secondary/20">
@@ -196,7 +245,7 @@ export default function CreateListing() {
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground font-body mb-6 hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />Back
         </button>
-        <h1 className="font-heading text-2xl font-bold mb-2">List Your Business</h1>
+        <h1 className="font-heading text-2xl font-bold mb-2">{existingListingId ? "Continue Your Listing" : "List Your Business"}</h1>
         <p className="text-sm text-muted-foreground font-body mb-8">Fill in the details below. Your listing will be reviewed before publishing.</p>
 
         {/* Progress */}
@@ -485,16 +534,14 @@ export default function CreateListing() {
               <div className="mt-4 pt-4 border-t border-border space-y-2">
                 <p className="text-sm font-semibold text-foreground">Listing Fee Payment</p>
                 <p className="text-xs text-muted-foreground">
-                  A listing fee of <span className="font-semibold text-foreground">KES {(LISTING_FEES[form.listing_type] || 2000).toLocaleString()}</span> is required to submit for review. You'll receive an M-Pesa STK Push to pay.
+                  {user?.role === "admin"
+                    ? "Administrator accounts do not pay listing fees. Your listing will be saved directly into the review workflow."
+                    : <>A listing fee of <span className="font-semibold text-foreground">KES {(LISTING_FEES[form.listing_type] || 2000).toLocaleString()}</span> is required before review. If payment is unsuccessful, your listing stays saved and you can return here later to pay.</>}
                 </p>
-                <Label className="text-xs font-medium flex items-center gap-1.5 mt-2"><Phone className="h-3 w-3" />M-Pesa Phone Number *</Label>
-                <Input
-                  type="tel"
-                  placeholder="+254 7XX XXX XXX"
-                  value={paymentPhone}
-                  onChange={e => setPaymentPhone(e.target.value)}
-                  className="h-10"
-                />
+                {user?.role !== "admin" && <>
+                  <Label className="text-xs font-medium flex items-center gap-1.5 mt-2"><Phone className="h-3 w-3" />M-Pesa Phone Number *</Label>
+                  <Input type="tel" placeholder="+254 7XX XXX XXX" value={paymentPhone} onChange={e => setPaymentPhone(e.target.value)} className="h-10" />
+                </>}
               </div>
             </CardContent>
           </Card>

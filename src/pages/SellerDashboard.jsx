@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Store, FileText, CheckCircle, XCircle, MessageSquare } from "lucide-react";
+import { Store, FileText, CheckCircle, XCircle, MessageSquare, CreditCard, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import BuyerSellerChat from "../components/BuyerSellerChat";
 import PullToRefreshWrapper from "../components/PullToRefreshWrapper";
@@ -32,6 +32,7 @@ export default function SellerDashboard() {
   const [conversations, setConversations] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [payingListingId, setPayingListingId] = useState(null);
   const identifier = user?.phone || user?.userId;
   const { unread, totalUnread } = useUnreadCounts(conversations, identifier);
 
@@ -70,6 +71,29 @@ export default function SellerDashboard() {
     };
     init();
   }, []);
+
+  const resumePayment = async (listing) => {
+    if (!listing?.id || payingListingId) return;
+    setPayingListingId(listing.id);
+    try {
+      const result = await api.request(`/api/listings/${encodeURIComponent(listing.id)}/payment`, {
+        method: "POST",
+        body: JSON.stringify({ phone: user?.phone || "" }),
+      });
+      if (result?.payment_status === "paid") {
+        toast.success("Listing payment confirmed.");
+      } else if (result?.success) {
+        toast.success(`M-Pesa prompt sent for KES ${Number(result.amount || 0).toLocaleString()}. Enter your PIN on your phone.`);
+      } else {
+        toast.error(result?.error || "Your listing is still saved. Please try the payment again when you are ready.");
+      }
+      await loadData();
+    } catch (error) {
+      toast.error("Your listing is safe. We could not start the payment right now. Please try again.");
+    } finally {
+      setPayingListingId(null);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -180,8 +204,22 @@ export default function SellerDashboard() {
                         <Badge variant={STATUS_COLORS[l.status] || "secondary"} className="text-[10px]">{l.status}</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">KES {(l.asking_price || 0).toLocaleString()} · {l.category} · {l.listing_type}</p>
+                      {l.payment_status !== "paid" && (
+                        <p className="text-xs text-amber-700 mt-1">{l.payment_status === "failed" ? "Payment was not completed. Your listing is saved." : "Payment is still required before review."}</p>
+                      )}
                     </div>
-                    <Link to={`/listing/${l.id}`}><Button variant="outline" size="sm" className="text-xs">View</Button></Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {l.payment_status !== "paid" && (
+                        <Button size="sm" onClick={() => resumePayment(l)} disabled={payingListingId === l.id} className="text-xs">
+                          {payingListingId === l.id ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CreditCard className="h-3.5 w-3.5 mr-1" />}
+                          {payingListingId === l.id ? "Starting…" : "Continue payment"}
+                        </Button>
+                      )}
+                      {(l.payment_status !== "paid" || l.status === "draft") && (
+                        <Link to={`/create-listing?listingId=${encodeURIComponent(l.id)}`}><Button variant="outline" size="sm" className="text-xs"><Pencil className="h-3.5 w-3.5 mr-1" />Continue</Button></Link>
+                      )}
+                      {l.status === "approved" || l.status === "active" ? <Link to={`/listing/${l.id}`}><Button variant="outline" size="sm" className="text-xs">View</Button></Link> : null}
+                    </div>
                   </CardContent></Card>
                 ))}
               </div>

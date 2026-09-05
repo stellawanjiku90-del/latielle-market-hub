@@ -58,7 +58,7 @@ export default function Login() {
       finalizeLogin(data.user);
     } catch (err) {
       const message = String(err?.message || "");
-      const notFound = /no verified .* account was found/i.test(message);
+      const notFound = selectedRole !== "admin" && /no verified .* account was found/i.test(message);
       setAccountNotFound(notFound);
       setError(
         notFound
@@ -296,7 +296,7 @@ export default function Login() {
               {error && (
                 <div className="mb-4 rounded-lg bg-destructive/10 text-destructive text-sm font-body">
                   <div className="p-3">{error}</div>
-                  {accountNotFound && (
+                  {accountNotFound && selectedRole !== "admin" && (
                     <div className="border-t border-destructive/15 px-3 py-3">
                       <button
                         type="button"
