@@ -50,11 +50,19 @@ const AuthenticatedApp = () => {
       {/* Protected routes — buyers, sellers and admins only */}
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
-          <Route path="/create-listing" element={<CreateListing />} />
-          <Route path="/seller-dashboard" element={<SellerDashboard />} />
-          <Route path="/buyer-dashboard" element={<BuyerDashboard />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route element={<ProtectedRoute roles={["seller"]} />}>
+            <Route path="/create-listing" element={<CreateListing />} />
+            <Route path="/seller-dashboard" element={<SellerDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["buyer"]} />}>
+            <Route path="/buyer-dashboard" element={<BuyerDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["admin"]} />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute roles={["buyer", "seller", "admin"]} />}>
+            <Route path="/profile" element={<Profile />} />
+          </Route>
         </Route>
       </Route>
     </Routes>
