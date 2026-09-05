@@ -13,6 +13,7 @@ import PullToRefreshWrapper from "../components/PullToRefreshWrapper";
 import DashboardProfileHeader from "../components/DashboardProfileHeader";
 import useUnreadCounts from "../hooks/useUnreadCounts";
 import NotificationBell from "../components/NotificationBell";
+import PushNotificationSetup from "../components/PushNotificationSetup";
 
 const REQUEST_STATUS_MAP = {
   pending_payment: { label: "Pending Payment", variant: "secondary" },
@@ -256,7 +257,10 @@ export default function BuyerDashboard() {
           </TabsContent>
 
           <TabsContent value="alerts">
-            <NotificationPreferences user={user} />
+            <div className="space-y-4">
+              <PushNotificationSetup />
+              <NotificationPreferences user={user} />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
