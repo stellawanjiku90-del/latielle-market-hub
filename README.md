@@ -1,22 +1,22 @@
-# Latielle Market Hub
+# LATIELLE MARKET HUB
 
-LATIELLE MARKET HUB is a React/Vite marketplace with a self-hosted Express/PostgreSQL backend for buying and selling established businesses across Kenya.
+LATIELLE MARKET HUB is a Kenya-focused marketplace for established businesses for sale. The project contains a React/Vite frontend and an Express/PostgreSQL backend designed to run as one service on Render.
 
-## Local setup
+## Production behavior
+- Guests can browse public marketplace content and read the public information pages.
+- Buyers and sellers authenticate with a phone number and 4-digit PIN. A verified phone may have one buyer account and one seller account, with the selected role determining the dashboard.
+- Confidential listing information is kept behind the platform access flow.
+- Required payments use M-Pesa STK Push and are confirmed from the payment callback before access or listing publication progresses.
+- Public support chat is routed through the backend to OpenAI; human support can be requested through the chat.
+- Listing images use seller-supplied media where available; missing images use a neutral local placeholder rather than stock photography.
+- Legacy service-worker registrations are removed at startup so an old cached application shell cannot trap a deployment on stale content.
 
-```bash
-cp .env.example .env
-npm ci
-npm run dev
-```
+## Render
+Build: `npm install --include=dev --no-audit --no-fund && npm run build`
+Start: `npm start`
+Health check: `/api/health`
 
-## Production
+Required production secrets and service credentials are documented in `.env.example` and `render.yaml`.
 
-The Render web service builds the React app with Vite and serves the finished site and `/api/*` from the same Express process.
-
-```bash
-npm install && npm run build
-npm start
-```
-
-Keep all secrets in Render environment variables. Never place OpenAI, M-Pesa, database or email credentials in frontend code or commit them to GitHub.
+## Final pre-launch checks
+Run `npm run lint` and `npm run build`, then test the complete buyer and seller flows with live M-Pesa credentials, private document access, file uploads, support chat and database connectivity before opening the marketplace to the public.
