@@ -29,6 +29,7 @@ export default function BuyerDashboard() {
   const [conversations, setConversations] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const identifier = user?.phone || user?.userId;
   const { unread, totalUnread } = useUnreadCounts(conversations, identifier);
 
@@ -54,9 +55,20 @@ export default function BuyerDashboard() {
     const init = async () => {
       const session = getSession();
       if (!session) { redirectToLogin("/buyer-dashboard"); return; }
+      if (session.role !== "buyer") {
+        const destination = session.role === "seller" ? "/seller-dashboard" : session.role === "admin" ? "/admin" : "/buyer-dashboard";
+        window.location.replace(destination);
+        return;
+      }
       setUser(session);
-      await loadData(session);
-      setLoading(false);
+      try {
+        await loadData(session);
+      } catch (error) {
+        console.error("Buyer Dashboard data load failed", error);
+        setLoadError("Your dashboard is open, but some account data could not be loaded. Please refresh in a moment.");
+      } finally {
+        setLoading(false);
+      }
     };
     init();
   }, []);
@@ -95,17 +107,26 @@ export default function BuyerDashboard() {
     if (!user) return;
     const identifier = user.phone || user.userId;
     const interval = setInterval(async () => {
-      const myRequests = await api.entities.DetailRequest.filter({ buyer_email: identifier }, "-created_date", 50);
-      setRequests(myRequests);
+      try {
+        const myRequests = await api.entities.DetailRequest.filter({ buyer_email: identifier }, "-created_date", 50);
+        setRequests(myRequests);
+      } catch (error) {
+        console.warn("Buyer dashboard polling failed", error);
+      }
     }, 4000);
     return () => clearInterval(interval);
   }, [user]);
 
   if (loading) return <div className="pt-24 flex justify-center"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
+  const dashboardErrorNotice = loadError ? (
+    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{loadError}</div>
+  ) : null;
+
   return (
     <PullToRefreshWrapper onRefresh={() => loadData()} className="pt-20 pb-16 min-h-screen bg-secondary/20">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        {dashboardErrorNotice}
         <div className="flex items-start justify-between">
           <DashboardProfileHeader session={user} title="Buyer Dashboard" />
           {identifier && <div className="pt-6"><NotificationBell recipient={identifier} /></div>}

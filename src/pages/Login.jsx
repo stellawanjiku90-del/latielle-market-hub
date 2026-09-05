@@ -6,11 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Phone, Loader2, ShieldCheck, Shield, Store, ShoppingBag, KeyRound } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 export default function Login() {
   const { login, user, isAuthenticated, isLoadingAuth, dashboardFor } = useAuth();
-  const navigate = useNavigate();
   const [step, setStep] = useState("role"); // role | phone | pin | signup-pin | payment | profile
   const [selectedRole, setSelectedRole] = useState(null);
   const [phone, setPhone] = useState("+254");
@@ -134,7 +133,10 @@ export default function Login() {
       email: user.email || "",
     });
 
-    navigate(dest, { replace: true });
+    // Persist the authenticated session first, then perform a real navigation.
+    // This avoids a race where the protected route renders before AuthContext
+    // has committed the new auth state, which previously left users on Login.
+    window.location.replace(dest);
   };
 
   return (
