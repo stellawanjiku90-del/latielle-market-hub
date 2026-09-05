@@ -166,6 +166,7 @@ function token(user) {
       id: user.id,
       email: user.email,
       role: user.role,
+      phone: user.phone || null,
     },
     JWT_SECRET,
     {
@@ -433,6 +434,14 @@ app.get('/api/me', auth(), async (req, res, next) => {
         email,
         role,
         phone,
+        favorites,
+        bio,
+        county,
+        subcounty,
+        profile_picture,
+        phone_verified,
+        verification_status,
+        name_locked,
         created_at
       FROM users
       WHERE id = $1
@@ -910,7 +919,7 @@ app.get('/api/auth/registration-status/:checkoutRequestId', async (req, res, nex
     if (!pending) return res.status(404).json({ error: 'Registration payment not found.' });
     if (pending.status === 'paid') {
       const u = (await db.query('SELECT * FROM users WHERE phone=$1 AND role=$2', [pending.phone, pending.role])).rows[0];
-      if (u) return res.json({ success: true, status: 'paid', user: phoneUser(u), token: token({ id: u.id, email: u.email, role: u.role }) });
+      if (u) return res.json({ success: true, status: 'paid', user: phoneUser(u), token: token(u) });
     }
     const resultCode = pending.result_code ?? null;
     res.json({
@@ -1037,7 +1046,7 @@ app.post('/api/auth/login-pin', sensitiveRateLimit, async (req,res,next)=>{
       return res.status(401).json({error:'Invalid phone number or PIN'});
     }
     await db.query('UPDATE users SET failed_login_attempts=0,pin_locked_until=NULL WHERE id=$1',[u.id]);
-    res.json({success:true,user:phoneUser(u),token:token({id:u.id,email:u.email,role:u.role})});
+    res.json({success:true,user:phoneUser(u),token:token(u)});
   }catch(e){next(e)}
 });
 
@@ -1121,8 +1130,12 @@ app.get('/api/entities/:entity', optionalAuth, async (req,res,next)=>{
     const vals=[]; const clauses=[];
     if(filters.created_by){
       if(!req.user) return res.status(401).json({error:'Authentication required'});
-      const identifier=String(req.user.phone || req.user.email || req.user.id);
-      if(!isAdmin(req) && String(filters.created_by)!==identifier) return res.status(403).json({error:'Forbidden'});
+      // Tokens issued by older deployments did not carry the phone number.
+      // Resolve the current account once so role-specific accounts continue to
+      // work after an upgrade without forcing users to log out first.
+      const owner = (await db.query('SELECT id, phone, email FROM users WHERE id=$1',[req.user.id])).rows[0];
+      const identifier=String(owner?.phone || owner?.email || owner?.id || '');
+      if(!isAdmin(req) && String(filters.created_by)!==identifier && String(filters.created_by)!==String(owner?.id || '')) return res.status(403).json({error:'Forbidden'});
       vals.push(filters.created_by);clauses.push(`(u.email=$${vals.length} OR u.phone=$${vals.length} OR u.id::text=$${vals.length})`);
     }
     if(filters.status){vals.push(filters.status);clauses.push(`l.status=$${vals.length}`)}
@@ -1166,8 +1179,10 @@ app.get('/api/entities/:entity', optionalAuth, async (req,res,next)=>{
   const vals=[name]; const clauses=['entity_name=$1'];
   // Generic application records are admin-only except a small owner-scoped set.
   if(!isAdmin(req) && ['Transaction','Report','SupportRequest','Notification','Conversation','BuyerPreference'].includes(name)) {
-    const identifier=req.user.phone || req.user.id;
-    vals.push(identifier); clauses.push(`(data->>'user_email'=$${vals.length} OR data->>'buyer_email'=$${vals.length} OR data->>'seller_email'=$${vals.length} OR data->>'recipient_email'=$${vals.length} OR data->>'user_id'=$${vals.length})`);
+    const owner = (await db.query('SELECT phone, email FROM users WHERE id=$1',[req.user.id])).rows[0];
+    const identities = [owner?.phone, owner?.email, req.user.id].filter(Boolean);
+    const placeholders = identities.map((value) => { vals.push(value); return `$${vals.length}`; });
+    clauses.push(`(data->>'user_email' IN (${placeholders.join(',')}) OR data->>'buyer_email' IN (${placeholders.join(',')}) OR data->>'seller_email' IN (${placeholders.join(',')}) OR data->>'recipient_email' IN (${placeholders.join(',')}) OR data->>'user_id' IN (${placeholders.join(',')}))`);
   }
   const r=await db.query(`SELECT id,data,created_at,updated_at FROM entity_records WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT ${limit}`,vals);
   res.json(r.rows.map(x=>({id:x.id,created_date:x.created_at,updated_date:x.updated_at,...x.data})));
