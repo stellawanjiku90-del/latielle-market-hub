@@ -15,7 +15,7 @@ export default function Login() {
   // Administrator access is deliberately not exposed through the public login UI.
   // It is available only through the private staff entry path and is still
   // protected server-side by the administrator phone allowlist.
-  const isPrivateAdminEntry = location.pathname === "/internal-admin-access";
+  const isPrivateAdminEntry = location.pathname === "/staff-portal-login-7f4c2a";
   const requestedRole = !isPrivateAdminEntry ? (["buyer", "seller"].includes(searchParams.get("role")) ? searchParams.get("role") : null) : "admin";
   const [step, setStep] = useState(requestedRole ? "phone" : "role"); // role | phone | pin | signup-pin | payment | profile
   const [selectedRole, setSelectedRole] = useState(requestedRole);
