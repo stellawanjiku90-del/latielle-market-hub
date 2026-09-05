@@ -11,6 +11,8 @@
       "enum": [
         "chat_opened",
         "new_message",
+        "new_business",
+        "business_sold",
         "warning",
         "general"
       ],

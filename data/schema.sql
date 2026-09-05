@@ -136,3 +136,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS pending_registrations_phone_role_unique_idx ON
 ALTER TABLE pending_registrations DROP CONSTRAINT IF EXISTS pending_registrations_role_check;
 ALTER TABLE pending_registrations ADD CONSTRAINT pending_registrations_role_check CHECK(role IN('buyer','seller','admin'));
 CREATE INDEX IF NOT EXISTS pending_reg_checkout_idx ON pending_registrations(checkout_request_id);
+
+
+-- Browser Web Push subscriptions. One buyer can have multiple devices/browsers.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ endpoint TEXT NOT NULL UNIQUE,
+ subscription JSONB NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id);
