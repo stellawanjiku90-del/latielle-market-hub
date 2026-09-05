@@ -4,6 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import GuestOnlyRoute from '@/components/GuestOnlyRoute';
 import OfflineGate from '@/components/OfflineGate';
 import { AuthProvider } from '@/lib/AuthContext';
 import Layout from './components/Layout.jsx';
@@ -39,11 +40,13 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<Home />} />
         <Route path="/browse" element={<Browse />} />
         <Route path="/listing/:listingId" element={<ListingDetail />} />
-        <Route path="/terms" element={<Terms />} />
         <Route path="/sold-businesses" element={<SoldBusinesses />} />
-        <Route path="/how-it-works" element={<HowItWorks />} />
-        <Route path="/refund-policy" element={<RefundPolicy />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route element={<GuestOnlyRoute />}>
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/refund-policy" element={<RefundPolicy />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        </Route>
         <Route path="*" element={<PageNotFound />} />
       </Route>
 
