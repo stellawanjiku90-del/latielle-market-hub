@@ -32,7 +32,6 @@ export default function SellerDashboard() {
   const [conversations, setConversations] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
   const identifier = user?.phone || user?.userId;
   const { unread, totalUnread } = useUnreadCounts(conversations, identifier);
 
@@ -40,14 +39,19 @@ export default function SellerDashboard() {
     const resolvedUser = me || user;
     if (!resolvedUser) return;
     const identifier = resolvedUser.phone || resolvedUser.userId;
-    const [l, r, c] = await Promise.all([
+
+    const results = await Promise.allSettled([
       api.entities.BusinessListing.filter({ created_by: identifier }, "-created_date", 50),
       api.entities.DetailRequest.filter({ seller_email: identifier }, "-created_date", 50),
       api.entities.Conversation.filter({ seller_email: identifier, type: "buyer_seller" }, "-last_message_at", 50),
     ]);
-    setListings(l); setRequests(r); setConversations(c);
+    if (results[0].status === "fulfilled") setListings(results[0].value);
+    else console.warn("Seller listings temporarily unavailable", results[0].reason);
+    if (results[1].status === "fulfilled") setRequests(results[1].value);
+    else console.warn("Seller requests temporarily unavailable", results[1].reason);
+    if (results[2].status === "fulfilled") setConversations(results[2].value);
+    else console.warn("Seller conversations temporarily unavailable", results[2].reason);
   }, [user]);
-
   useEffect(() => {
     const init = async () => {
       const session = getSession();
@@ -60,9 +64,6 @@ export default function SellerDashboard() {
       setUser(session);
       try {
         await loadData(session);
-      } catch (error) {
-        console.error("Seller Dashboard data load failed", error);
-        setLoadError("Your dashboard is open, but some account data could not be loaded. Please refresh in a moment.");
       } finally {
         setLoading(false);
       }
@@ -127,14 +128,9 @@ export default function SellerDashboard() {
 
   if (loading) return <div className="pt-24 flex justify-center"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
-  const dashboardErrorNotice = loadError ? (
-    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{loadError}</div>
-  ) : null;
-
   return (
     <PullToRefreshWrapper onRefresh={() => loadData()} className="pt-20 pb-16 min-h-screen bg-secondary/20">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {dashboardErrorNotice}
         <div className="flex items-start justify-between">
           <DashboardProfileHeader session={user} title="Seller Dashboard" />
           {identifier && <div className="pt-6"><NotificationBell recipient={identifier} /></div>}
