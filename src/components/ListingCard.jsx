@@ -5,17 +5,7 @@ import VerificationBadge from "./VerificationBadge";
 import WatermarkedMedia from "./WatermarkedMedia";
 import ViewCount from "./ViewCount";
 
-const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=400&fit=crop";
-
-const categoryImages = {
-  "Restaurant": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&h=400&fit=crop",
-  "Salon": "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&h=400&fit=crop",
-  "Hotel": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=400&fit=crop",
-  "Pharmacy": "https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&h=400&fit=crop",
-  "Supermarket": "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=600&h=400&fit=crop",
-  "Gym": "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&h=400&fit=crop",
-  "Café": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=400&fit=crop",
-};
+const PLACEHOLDER_IMG = "/listing-placeholder.svg";
 
 function formatPrice(price) {
   if (!price) return "Price on request";
@@ -31,7 +21,7 @@ export default function ListingCard({ listing }) {
         <div className="relative aspect-[4/3] overflow-hidden">
           <WatermarkedMedia
             src={imgSrc}
-            alt={listing.title || listing.category}
+            alt={listing.title ? `${listing.title} business listing` : `${listing.category || "Business"} listing image`}
             className="group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">

@@ -4,10 +4,10 @@ import { Search, ShieldCheck, Lock, MapPinned, ArrowRight, Store, Users, WalletC
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const STATS = [
-  { value: "10,000+", label: "businesses" },
-  { value: "1,000,000+", label: "buyers" },
-  { value: "47", label: "counties" },
+const TRUST_POINTS = [
+  { value: "Seller checks", label: "identity and listing review" },
+  { value: "Private details", label: "shared through the platform" },
+  { value: "M-Pesa", label: "for required payments" },
 ];
 
 export default function HeroSection() {
@@ -29,7 +29,7 @@ export default function HeroSection() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3.5 py-2 text-sm font-medium text-primary">
               <MapPinned className="h-4 w-4" />
-              Businesses across all 47 counties
+              Built for the Kenyan market
             </div>
 
             <h1 className="mt-6 max-w-3xl font-heading text-4xl sm:text-5xl lg:text-[4.1rem] font-bold tracking-[-0.035em] text-foreground leading-[1.02]">
@@ -63,11 +63,11 @@ export default function HeroSection() {
               <span className="inline-flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" />M-Pesa payments</span>
             </div>
 
-            <div className="mt-10 grid grid-cols-3 gap-5 max-w-2xl border-t border-border pt-7">
-              {STATS.map((stat) => (
-                <div key={stat.label}>
-                  <div className="font-heading text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{stat.value}</div>
-                  <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-2xl border-t border-border pt-7">
+              {TRUST_POINTS.map((point) => (
+                <div key={point.value}>
+                  <div className="font-heading text-lg sm:text-xl font-bold tracking-tight text-foreground">{point.value}</div>
+                  <div className="mt-1 text-sm text-muted-foreground leading-5">{point.label}</div>
                 </div>
               ))}
             </div>

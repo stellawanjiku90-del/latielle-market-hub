@@ -56,16 +56,16 @@ export default function WatermarkedMedia({ src, type = "image", className, alt =
           style={{ position: "absolute", inset: 0 }}
         >
           <defs>
-            <pattern id="wm-pattern" x="0" y="0" width="220" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
+            <pattern id="wm-pattern" x="0" y="0" width="280" height="150" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
               <text
                 x="10"
                 y="60"
                 fontFamily="'Inter', sans-serif"
-                fontSize="13"
+                fontSize="11"
                 fontWeight="700"
                 letterSpacing="2"
-                fill="rgba(255,255,255,0.38)"
-                stroke="rgba(0,0,0,0.10)"
+                fill="rgba(255,255,255,0.24)"
+                stroke="rgba(0,0,0,0.06)"
                 strokeWidth="0.5"
               >
                 {WATERMARK_TEXT}
