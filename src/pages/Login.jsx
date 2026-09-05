@@ -6,12 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Phone, Loader2, ShieldCheck, Shield, Store, ShoppingBag, KeyRound } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
 
 export default function Login() {
   const { login, user, isAuthenticated, isLoadingAuth, dashboardFor } = useAuth();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const requestedRole = ["buyer", "seller"].includes(searchParams.get("role")) ? searchParams.get("role") : null;
+  // Administrator access is deliberately not exposed through the public login UI.
+  // It is available only through the private staff entry path and is still
+  // protected server-side by the administrator phone allowlist.
+  const isPrivateAdminEntry = location.pathname === "/internal-admin-access";
+  const requestedRole = !isPrivateAdminEntry ? (["buyer", "seller"].includes(searchParams.get("role")) ? searchParams.get("role") : null) : "admin";
   const [step, setStep] = useState(requestedRole ? "phone" : "role"); // role | phone | pin | signup-pin | payment | profile
   const [selectedRole, setSelectedRole] = useState(requestedRole);
   const [phone, setPhone] = useState("+254");
@@ -20,17 +25,21 @@ export default function Login() {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [accountNotFound, setAccountNotFound] = useState(false);
 
   if (!isLoadingAuth && isAuthenticated && user) return <Navigate to={dashboardFor(user)} replace />;
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
+    setAccountNotFound(false);
+    setError("");
     setStep("phone");
   };
 
   // From phone step: try PIN login route
   const goToPin = () => {
     setError("");
+    setAccountNotFound(false);
     if (!phone || phone.trim().length < 10) { setError("Please enter a valid phone number."); return; }
     setPinCode("");
     setStep("pin");
@@ -38,6 +47,7 @@ export default function Login() {
 
   const handlePinLogin = async () => {
     setError("");
+    setAccountNotFound(false);
     setLoading(true);
     try {
       const res = await apiFunction("loginWithPin", { phone: phone.trim(), pin: pinCode, role: selectedRole });
@@ -47,7 +57,14 @@ export default function Login() {
       if (!data?.success) throw new Error("Login failed. Please try again.");
       finalizeLogin(data.user);
     } catch (err) {
-      setError(err.message || "Login failed. Please try again.");
+      const message = String(err?.message || "");
+      const notFound = /no verified .* account was found/i.test(message);
+      setAccountNotFound(notFound);
+      setError(
+        notFound
+          ? `No verified ${selectedRole === "admin" ? "administrator" : selectedRole} account is registered for this phone number.`
+          : (message || "We could not sign you in. Please check your details and try again.")
+      );
     } finally {
       setLoading(false);
     }
@@ -55,6 +72,7 @@ export default function Login() {
 
   const handleStartSignup = () => {
     setError("");
+    setAccountNotFound(false);
     if (!phone || phone.trim().length < 10) { setError("Please enter a valid Kenyan phone number."); return; }
     setPinCode("");
     setPinConfirm("");
@@ -202,15 +220,15 @@ export default function Login() {
                 <Phone className="h-6 w-6 text-primary" />
               </div>
               <h1 className="font-heading text-2xl font-bold text-center text-foreground mb-1">
-                {selectedRole === "seller" ? "Seller Sign In" : "Buyer Sign In"}
+                {selectedRole === "admin" ? "Administrator Sign In" : selectedRole === "seller" ? "Seller Sign In" : "Buyer Sign In"}
               </h1>
               <p className="text-sm text-muted-foreground text-center font-body mb-1">
                 Sign in or create an account with your phone number
               </p>
               <div className="flex justify-center mb-5">
-                <span className={`inline-flex items-center gap-1.5 text-xs font-body px-3 py-1 rounded-full ${selectedRole === "seller" ? "bg-accent/10 text-accent-foreground" : "bg-primary/10 text-primary"}`}>
-                  {selectedRole === "seller" ? <Store className="h-3 w-3" /> : <ShoppingBag className="h-3 w-3" />}
-                  Signing up as {selectedRole === "seller" ? "Seller" : "Buyer"}
+                <span className={`inline-flex items-center gap-1.5 text-xs font-body px-3 py-1 rounded-full ${selectedRole === "admin" ? "bg-muted text-foreground" : selectedRole === "seller" ? "bg-accent/10 text-accent-foreground" : "bg-primary/10 text-primary"}`}>
+                  {selectedRole === "admin" ? <ShieldCheck className="h-3 w-3" /> : selectedRole === "seller" ? <Store className="h-3 w-3" /> : <ShoppingBag className="h-3 w-3" />}
+                  {selectedRole === "admin" ? "Administrator access" : `Signing up as ${selectedRole === "seller" ? "Seller" : "Buyer"}`}
                 </span>
               </div>
 
@@ -240,15 +258,23 @@ export default function Login() {
                 <Button onClick={goToPin} className="w-full h-12 font-body font-medium gap-2" disabled={!phone.trim()}>
                   <KeyRound className="h-4 w-4" /> Sign in with PIN
                 </Button>
-                <Button onClick={handleStartSignup} variant="outline" className="w-full h-12 font-body font-medium" disabled={loading || !phone.trim()}>
-                  {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting verification...</> : "New here? Verify with KSh 100"}
-                </Button>
+                {selectedRole !== "admin" && (
+                  <Button onClick={handleStartSignup} variant="outline" className="w-full h-12 font-body font-medium" disabled={loading || !phone.trim()}>
+                    {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Starting verification...</> : "New here? Verify with KSh 100"}
+                  </Button>
+                )}
               </div>
 
               <div className="mt-4 text-center">
-                <button onClick={() => { setStep("role"); setError(""); }} className="text-sm text-muted-foreground hover:text-foreground font-body">
-                  ← Change role
-                </button>
+                {isPrivateAdminEntry ? (
+                  <Link to="/" className="text-sm text-muted-foreground hover:text-foreground font-body">
+                    ← Return to LATIELLE MARKET HUB
+                  </Link>
+                ) : (
+                  <button onClick={() => { setStep("role"); setError(""); }} className="text-sm text-muted-foreground hover:text-foreground font-body">
+                    ← Change role
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -264,15 +290,28 @@ export default function Login() {
                 4-digit PIN for<br /><span className="font-medium text-foreground">{phone}</span>
               </p>
               <p className="text-xs text-muted-foreground text-center font-body mb-6">
-                Signing in as <span className="font-medium text-foreground">{selectedRole === "seller" ? "Seller" : "Buyer"}</span>. The same phone and PIN may be used for your other role account.
+                Signing in as <span className="font-medium text-foreground">{selectedRole === "admin" ? "Administrator" : selectedRole === "seller" ? "Seller" : "Buyer"}</span>. {selectedRole === "admin" ? "Administrator access is restricted to authorised platform numbers." : "The same phone and PIN may be used for your other role account."}
               </p>
 
               {error && (
-                <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-body">{error}</div>
+                <div className="mb-4 rounded-lg bg-destructive/10 text-destructive text-sm font-body">
+                  <div className="p-3">{error}</div>
+                  {accountNotFound && (
+                    <div className="border-t border-destructive/15 px-3 py-3">
+                      <button
+                        type="button"
+                        onClick={handleStartSignup}
+                        className="font-medium underline underline-offset-2 hover:no-underline"
+                      >
+                        Register this {selectedRole} account with this number
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="flex justify-center mb-6">
-                <InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus>
+                <InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus mask>
                   <InputOTPGroup>
                     <InputOTPSlot index={0} />
                     <InputOTPSlot index={1} />
@@ -288,7 +327,7 @@ export default function Login() {
 
               <p className="text-center text-sm text-muted-foreground mt-4 font-body">Forgot your PIN? Contact Latielle Market Hub support for account recovery.</p>
               <div className="mt-2 text-center">
-                <button onClick={() => { setStep("phone"); setPinCode(""); setError(""); }} className="text-sm text-muted-foreground hover:text-foreground font-body">
+                <button onClick={() => { setStep("phone"); setPinCode(""); setError(""); setAccountNotFound(false); }} className="text-sm text-muted-foreground hover:text-foreground font-body">
                   ← Change number
                 </button>
               </div>
@@ -307,8 +346,8 @@ export default function Login() {
                 <p className="text-xs text-muted-foreground">Use your real name. Once the KSh 100 verification payment succeeds, this verified name is locked on your account and cannot be edited.</p>
               </div>
               <div className="space-y-5">
-                <div><Label className="font-body mb-2 block">4-digit PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
-                <div><Label className="font-body mb-2 block">Confirm PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinConfirm} onChange={setPinConfirm}><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
+                <div><Label className="font-body mb-2 block">4-digit PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinCode} onChange={setPinCode} autoFocus mask><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
+                <div><Label className="font-body mb-2 block">Confirm PIN</Label><div className="flex justify-center"><InputOTP maxLength={4} value={pinConfirm} onChange={setPinConfirm} mask><InputOTPGroup><InputOTPSlot index={0}/><InputOTPSlot index={1}/><InputOTPSlot index={2}/><InputOTPSlot index={3}/></InputOTPGroup></InputOTP></div></div>
                 <Button className="w-full h-12 font-body font-medium" onClick={handleRegistrationPayment} disabled={loading || fullName.trim().split(/\s+/).length < 2 || pinCode.length<4 || pinConfirm.length<4}>{loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/>Starting M-Pesa...</> : "Pay KSh 100 & Verify"}</Button>
               </div>
               <button onClick={() => { setStep("phone"); setError(""); }} className="w-full mt-5 text-sm text-muted-foreground hover:text-foreground font-body">← Back</button>
