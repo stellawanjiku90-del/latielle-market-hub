@@ -31,6 +31,8 @@ const AuthenticatedApp = () => {
     <Routes>
       {/* Public auth routes */}
       <Route path="/login" element={<Login />} />
+      {/* Private staff entry. This path is intentionally not linked from the public app. */}
+      <Route path="/internal-admin-access" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
