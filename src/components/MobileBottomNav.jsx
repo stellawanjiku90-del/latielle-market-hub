@@ -73,11 +73,16 @@ export default function MobileBottomNav() {
     navigate(dest);
   };
 
-  const tabs = [
+  const homeDefault = user ? (user.role === "admin" ? "/admin" : user.role === "seller" ? "/seller-dashboard" : "/buyer-dashboard") : "/";
+  const tabs = user ? [
+    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, default: tabHistory.current.dashboard },
+    { key: "browse", label: "Browse", icon: Search, default: "/browse" },
+    { key: "messages", label: "Messages", icon: MessageSquare, default: tabHistory.current.messages },
+    { key: "home", label: "Home", icon: Home, default: homeDefault },
+  ] : [
     { key: "home", label: "Home", icon: Home, default: "/" },
     { key: "browse", label: "Browse", icon: Search, default: "/browse" },
-    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, default: tabHistory.current.dashboard },
-    { key: "messages", label: "Messages", icon: MessageSquare, default: tabHistory.current.messages },
+    { key: "messages", label: "Sign in", icon: MessageSquare, default: "/login" },
   ];
 
   return (

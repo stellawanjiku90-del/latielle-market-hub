@@ -8,11 +8,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Menu, Shield, User, LogOut, LayoutDashboard, ArrowLeft } from "lucide-react";
 
-const NAV_LINKS = [
+const GUEST_NAV_LINKS = [
   { label: "Browse", path: "/browse" },
   { label: "Sold", path: "/sold-businesses" },
   { label: "How It Works", path: "/how-it-works" },
 ];
+
+const AUTH_NAV = {
+  buyer: [
+    { label: "Browse", path: "/browse" },
+    { label: "Saved", path: "/buyer-dashboard" },
+  ],
+  seller: [
+    { label: "My Listings", path: "/seller-dashboard" },
+    { label: "Create Listing", path: "/create-listing" },
+  ],
+  admin: [
+    { label: "Admin", path: "/admin" },
+  ],
+};
 
 // These paths are "root" screens — show logo. All others show back button on mobile.
 const ROOT_PATHS = ["/", "/browse", "/seller-dashboard", "/buyer-dashboard", "/admin"];
@@ -25,6 +39,7 @@ export default function GlobalHeader() {
   const [scrolled, setScrolled] = useState(false);
 
   const isRoot = ROOT_PATHS.includes(location.pathname);
+  const navLinks = user ? (AUTH_NAV[user.role] || AUTH_NAV.buyer) : GUEST_NAV_LINKS;
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10);
@@ -66,7 +81,7 @@ export default function GlobalHeader() {
 
           {/* Center: desktop nav links */}
           <div className="hidden md:flex items-center gap-8">
-            {NAV_LINKS.map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
@@ -113,7 +128,7 @@ export default function GlobalHeader() {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-72 font-body">
                   <div className="flex flex-col gap-6 mt-8">
-                    {NAV_LINKS.map((link) => (
+                    {navLinks.map((link) => (
                       <Link key={link.path} to={link.path} onClick={() => setOpen(false)} className="text-lg font-medium select-none">{link.label}</Link>
                     ))}
                     <hr className="border-border" />

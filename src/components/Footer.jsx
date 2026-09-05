@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/useAuth";
 import { Shield, Mail } from "lucide-react";
 
 export default function Footer() {
+  const { user, logout } = useAuth();
   return (
     <footer className="bg-foreground text-background font-body">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
@@ -23,18 +25,36 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm mb-4">Platform</h4>
             <div className="flex flex-col gap-3">
-              <Link to="/browse" className="text-sm text-background/70 hover:text-background transition-colors">Browse businesses</Link>
-              <Link to="/how-it-works" className="text-sm text-background/70 hover:text-background transition-colors">How it works</Link>
-              <Link to="/sold-businesses" className="text-sm text-background/70 hover:text-background transition-colors">Sold businesses</Link>
+              <Link to={user ? (user.role === "seller" ? "/seller-dashboard" : user.role === "admin" ? "/admin" : "/buyer-dashboard") : "/browse"} className="text-sm text-background/70 hover:text-background transition-colors">{user ? "Dashboard" : "Browse businesses"}</Link>
+              {user ? (
+                <>
+                  <Link to={user.role === "seller" ? "/create-listing" : "/browse"} className="text-sm text-background/70 hover:text-background transition-colors">{user.role === "seller" ? "Create a listing" : "Browse businesses"}</Link>
+                  <Link to="/profile" className="text-sm text-background/70 hover:text-background transition-colors">My profile</Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/how-it-works" className="text-sm text-background/70 hover:text-background transition-colors">How it works</Link>
+                  <Link to="/sold-businesses" className="text-sm text-background/70 hover:text-background transition-colors">Sold businesses</Link>
+                </>
+              )}
             </div>
           </div>
 
           <div>
-            <h4 className="font-semibold text-sm mb-4">Information</h4>
+            <h4 className="font-semibold text-sm mb-4">{user ? "Account" : "Information"}</h4>
             <div className="flex flex-col gap-3">
-              <Link to="/terms" className="text-sm text-background/70 hover:text-background transition-colors">Terms & Conditions</Link>
-              <Link to="/refund-policy" className="text-sm text-background/70 hover:text-background transition-colors">Refund Policy</Link>
-              <Link to="/privacy-policy" className="text-sm text-background/70 hover:text-background transition-colors">Privacy Policy</Link>
+              {user ? (
+                <>
+                  <Link to="/profile" className="text-sm text-background/70 hover:text-background transition-colors">Profile & settings</Link>
+                  <button onClick={() => logout()} className="text-left text-sm text-background/70 hover:text-background transition-colors">Sign out</button>
+                </>
+              ) : (
+                <>
+                  <Link to="/terms" className="text-sm text-background/70 hover:text-background transition-colors">Terms & Conditions</Link>
+                  <Link to="/refund-policy" className="text-sm text-background/70 hover:text-background transition-colors">Refund Policy</Link>
+                  <Link to="/privacy-policy" className="text-sm text-background/70 hover:text-background transition-colors">Privacy Policy</Link>
+                </>
+              )}
             </div>
           </div>
         </div>
