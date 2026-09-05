@@ -10,12 +10,14 @@ if (!rootElement) {
   throw new Error('LATIELLE root element was not found.');
 }
 
-// Older builds registered a service worker. Remove any legacy registration so
-// a stale cached application shell cannot override a fresh production deploy.
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((registration) => registration.unregister());
-  }).catch(() => {});
+// Register the notification service worker. It does not cache the application
+// shell, so deployments always load the current React build.
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
+      console.warn("Service worker registration failed", error);
+    });
+  });
 }
 
 ReactDOM.createRoot(rootElement).render(
