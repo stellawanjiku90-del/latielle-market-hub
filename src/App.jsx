@@ -5,8 +5,8 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import PageNotFound from './lib/PageNotFound';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import OfflineGate from '@/components/OfflineGate';
+import { AuthProvider } from '@/lib/AuthContext';
 import Layout from './components/Layout.jsx';
-import { getSession } from '@/lib/auth';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -25,19 +25,6 @@ import SoldBusinesses from './pages/SoldBusinesses';
 import RefundPolicy from './pages/RefundPolicy';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 
-function getDashboardPath(session) {
-  if (!session) return '/login';
-  if (session.role === 'admin') return '/admin';
-  if (session.role === 'seller') return '/seller-dashboard';
-  return '/buyer-dashboard';
-}
-
-const GuestHome = () => {
-  const session = getSession();
-  if (session) return <Navigate to={getDashboardPath(session)} replace />;
-  return <Home />;
-};
-
 const AuthenticatedApp = () => {
   return (
     <Routes>
@@ -49,7 +36,7 @@ const AuthenticatedApp = () => {
 
       {/* Public pages — guests can browse freely */}
       <Route element={<Layout />}>
-        <Route path="/" element={<GuestHome />} />
+        <Route path="/" element={<Home />} />
         <Route path="/browse" element={<Browse />} />
         <Route path="/listing/:listingId" element={<ListingDetail />} />
         <Route path="/terms" element={<Terms />} />
@@ -78,14 +65,16 @@ const AuthenticatedApp = () => {
 function App() {
 
   return (
-    <QueryClientProvider client={queryClientInstance}>
-      <Router>
-        <OfflineGate>
-          <AuthenticatedApp />
-        </OfflineGate>
-      </Router>
-      <Toaster />
-    </QueryClientProvider>
+    <AuthProvider>
+      <QueryClientProvider client={queryClientInstance}>
+        <Router>
+          <OfflineGate>
+            <AuthenticatedApp />
+          </OfflineGate>
+        </Router>
+        <Toaster />
+      </QueryClientProvider>
+    </AuthProvider>
   )
 }
 
