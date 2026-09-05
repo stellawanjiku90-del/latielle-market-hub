@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, FileText, Store } from "lucide-react";
+import { CheckCircle, XCircle, FileText, Store, Tag } from "lucide-react";
 import DocumentViewer from "./DocumentViewer";
 
 function DetailRow({ label, value }) {
@@ -18,12 +18,13 @@ function DetailRow({ label, value }) {
   );
 }
 
-export default function ListingReviewModal({ open, onOpenChange, listing, onApprove, onReject }) {
+export default function ListingReviewModal({ open, onOpenChange, listing, onApprove, onReject, onMarkSold, onRestore }) {
   const [mode, setMode] = useState("review"); // review | reject
   const [reason, setReason] = useState("");
+  const [soldPrice, setSoldPrice] = useState(listing?.sold_price ?? "");
 
   useEffect(() => {
-    if (open) { setMode("review"); setReason(""); }
+    if (open) { setMode("review"); setReason(""); setSoldPrice(listing?.sold_price ?? ""); }
   }, [open, listing?.id]);
 
   if (!listing) return null;
@@ -117,6 +118,36 @@ export default function ListingReviewModal({ open, onOpenChange, listing, onAppr
               <DocumentViewer documents={allDocs} />
             </div>
           </div>
+
+          {(listing.status === "approved" || listing.status === "active" || listing.status === "sold") && mode === "review" && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sale status</p>
+              {listing.status === "sold" ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Marked as sold</p>
+                    {listing.sold_price != null && <p className="text-xs text-muted-foreground">Sold price: KES {Number(listing.sold_price).toLocaleString()}</p>}
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => onRestore?.(listing.id)}>Restore Listing</Button>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    placeholder="Sold price (optional)"
+                    value={soldPrice}
+                    onChange={(e) => setSoldPrice(e.target.value)}
+                    className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <Button type="button" variant="outline" className="text-sm gap-1.5" onClick={() => onMarkSold?.(listing.id, soldPrice)}>
+                    <Tag className="h-4 w-4" />Mark as Sold
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {mode === "reject" && (
             <div className="space-y-1.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
