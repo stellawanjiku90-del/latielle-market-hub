@@ -36,6 +36,7 @@ const OPENAI_FALLBACK_MODEL = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini';
 const aiRateWindow = new Map();
 const OPENAI_TIMEOUT_MS = 25_000;
 const DETAIL_REQUEST_FEE = 1000;
+const ADMIN_PHONES = new Set(String(process.env.ADMIN_PHONES || '+254703927978,+254706692111').split(',').map(normalizePhone).filter(Boolean));
 
 const OPENAI_INSTRUCTIONS = `You are the customer support assistant for LATIELLE MARKET HUB, a Kenyan marketplace for buying and selling established businesses across Kenya.
 
@@ -1022,17 +1023,38 @@ app.post('/api/auth/login-pin', sensitiveRateLimit, async (req,res,next)=>{
   try {
     const phone=normalizePhone(req.body.phone), pin=String(req.body.pin||'');
     const requestedRole = String(req.body.role || '').toLowerCase();
-    if (!isKenyanPhone(phone) || !/^\d{4}$/.test(pin) || !['buyer','seller'].includes(requestedRole)) {
-      return res.status(401).json({error:'Select Buyer or Seller and enter a valid phone number and 4-digit PIN.'});
+    if (!isKenyanPhone(phone) || !/^\d{4}$/.test(pin) || !['buyer','seller','admin'].includes(requestedRole)) {
+      return res.status(401).json({error:'Select an account type and enter a valid phone number and 4-digit PIN.'});
+    }
+    if (requestedRole === 'admin' && !ADMIN_PHONES.has(phone)) {
+      return res.status(401).json({error:'This phone number is not authorised for administrator access.'});
     }
 
-    // Phone numbers are intentionally not globally unique: one verified phone
-    // may have one buyer account and one seller account. The selected role is
-    // part of authentication so the user lands in the correct dashboard.
-    const r=await db.query(`SELECT * FROM users WHERE phone=$1 AND role=$2`,[phone, requestedRole]);
-    const u=r.rows[0];
+    // Phone numbers may have separate buyer, seller and admin accounts.
+    let u=(await db.query(`SELECT * FROM users WHERE phone=$1 AND role=$2`,[phone, requestedRole])).rows[0];
+
+    // Older migrations could leave an allowlisted administrator without its
+    // dedicated admin row. Restore that row without replacing buyer/seller data.
+    if (!u && requestedRole === 'admin') {
+      const source=(await db.query(
+        `SELECT * FROM users WHERE phone=$1 AND phone_verified=true AND pin_hash IS NOT NULL
+         ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'seller' THEN 1 ELSE 2 END LIMIT 1`, [phone]
+      )).rows[0];
+      if (source) {
+        const accountEmail=`admin+${phone.replace(/[^0-9]/g, '')}@latielle.local`;
+        u=(await db.query(
+          `INSERT INTO users(name,email,password_hash,role,phone,phone_verified,pin_hash,has_pin,verification_status,name_locked,verified_at)
+           VALUES($1,$2,$3,'admin',$4,true,$5,true,'verified',true,COALESCE($6,NOW()))
+           ON CONFLICT(phone,role) DO UPDATE SET pin_hash=EXCLUDED.pin_hash,has_pin=true,phone_verified=true,verification_status='verified'
+           RETURNING *`,
+          [source.name,accountEmail,source.password_hash,phone,source.pin_hash,source.verified_at]
+        )).rows[0];
+      }
+    }
     if (!u || !u.phone_verified || !u.pin_hash) {
-      return res.status(401).json({error:`No verified ${requestedRole} account was found for this phone number. Register this role first.`});
+      return res.status(401).json({error: requestedRole === 'admin'
+        ? 'No verified administrator account was found for this phone number. Please contact platform support.'
+        : `No verified ${requestedRole} account was found for this phone number. Register this role first.`});
     }
     if (u.pin_locked_until && new Date(u.pin_locked_until) > new Date()) return res.status(429).json({error:'Too many failed attempts. Please try again later.'});
     const valid = await bcrypt.compare(pin,u.pin_hash);
