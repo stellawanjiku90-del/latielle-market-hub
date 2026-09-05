@@ -3,15 +3,27 @@ import { Link, Navigate } from "react-router-dom";
 import { api } from "@/api/apiClient";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Star, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck, Search, Store, Lock } from "lucide-react";
 import HeroSection from "../components/HeroSection";
 import TrustSection from "../components/TrustSection";
 import ListingCard from "../components/ListingCard";
 
-const TESTIMONIALS = [
-  { name: "James Mwangi", county: "Nairobi, Westlands", text: "I listed my hardware shop on LATIELLE MARKET HUB and had three serious inquiries within the first week. The buyer verification process gave me peace of mind — I knew I was dealing with genuine buyers." },
-  { name: "Grace Wanjiku", county: "Mombasa, Nyali", text: "I was looking for a salon business in Mombasa for months. Through this platform I found a verified listing in Nyali with full financial records. The whole process was transparent and professional." },
-  { name: "Peter Kamau", county: "Nakuru Town", text: "Selling my cyber café used to feel risky — you never know who is genuine. The M-Pesa payment system and seller verification made everything straightforward. Highly recommend to any business owner." },
+const MARKETPLACE_PILLARS = [
+  {
+    icon: Search,
+    title: "Start with the right opportunity",
+    text: "Search by business, category, county or price and compare the public information before you enquire.",
+  },
+  {
+    icon: Store,
+    title: "Sell an established business",
+    text: "Create a listing with your business information, photos and supporting documents for review.",
+  },
+  {
+    icon: Lock,
+    title: "Keep sensitive details private",
+    text: "Confidential information is shared through the platform only after the required access step and approval.",
+  },
 ];
 
 export default function Home() {
@@ -58,6 +70,20 @@ export default function Home() {
           ) : featured.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {featured.map((listing) => <ListingCard key={listing.id} listing={listing} />)}
+              {featured.length < 3 && (
+                <article className="rounded-2xl border border-dashed border-border bg-secondary/25 p-6 sm:p-7 flex flex-col justify-between min-h-[320px]">
+                  <div>
+                    <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Search className="h-5 w-5 text-primary" aria-hidden="true" />
+                    </div>
+                    <h3 className="mt-5 font-heading text-xl font-semibold text-foreground">Looking for something specific?</h3>
+                    <p className="mt-2 text-sm text-muted-foreground leading-6">Use the full marketplace search to narrow opportunities by county, category and price.</p>
+                  </div>
+                  <Link to="/browse" className="mt-6">
+                    <Button variant="outline" className="gap-2">Browse all businesses <ArrowRight className="h-4 w-4" /></Button>
+                  </Link>
+                </article>
+              )}
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/25 px-6 py-16 text-center">
@@ -66,7 +92,7 @@ export default function Home() {
               </div>
               <h3 className="mt-5 font-heading text-xl font-semibold text-foreground">New listings are on the way.</h3>
               <p className="mt-2 max-w-lg mx-auto text-muted-foreground">If you are selling an established business, you can start your listing and put it in front of interested buyers.</p>
-              <Link to="/create-listing">
+              <Link to="/login?role=seller">
                 <Button className="mt-6">List your business</Button>
               </Link>
             </div>
@@ -78,21 +104,21 @@ export default function Home() {
 
       <section className="py-20 sm:py-24 bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-2xl mb-10">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">From our community</p>
-            <h2 className="mt-2 font-heading text-3xl sm:text-4xl font-bold tracking-tight text-foreground">What buyers and sellers say</h2>
+          <div className="max-w-3xl mb-10">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">A clearer way to transact</p>
+            <h2 className="mt-2 font-heading text-3xl sm:text-4xl font-bold tracking-tight text-foreground">Built around the decisions that matter.</h2>
+            <p className="mt-4 text-base sm:text-lg text-muted-foreground leading-7">
+              LATIELLE MARKET HUB is designed to help buyers assess opportunities and give sellers a more structured way to present an established business.
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((testimonial) => (
-              <article key={testimonial.name} className="bg-background border border-border rounded-2xl p-6 shadow-sm">
-                <div className="flex gap-1 mb-5" aria-label="5 out of 5 stars">
-                  {[1, 2, 3, 4, 5].map((i) => <Star key={i} className="h-4 w-4 fill-primary text-primary" aria-hidden="true" />)}
+            {MARKETPLACE_PILLARS.map((item) => (
+              <article key={item.title} className="bg-background border border-border rounded-2xl p-6 shadow-sm">
+                <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <item.icon className="h-5 w-5 text-primary" aria-hidden="true" />
                 </div>
-                <p className="text-[15px] text-muted-foreground leading-7">“{testimonial.text}”</p>
-                <div className="mt-6 pt-5 border-t border-border">
-                  <p className="text-sm font-semibold text-foreground">{testimonial.name}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{testimonial.county}</p>
-                </div>
+                <h3 className="mt-5 font-heading text-lg font-semibold text-foreground">{item.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-6">{item.text}</p>
               </article>
             ))}
           </div>
@@ -108,7 +134,7 @@ export default function Home() {
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Link to="/browse"><Button size="lg" variant="secondary" className="w-full sm:w-auto">Browse businesses</Button></Link>
-            <Link to="/create-listing"><Button size="lg" variant="outline" className="w-full sm:w-auto border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">Sell a business</Button></Link>
+            <Link to="/login?role=seller"><Button size="lg" variant="outline" className="w-full sm:w-auto border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">Sell a business</Button></Link>
           </div>
         </div>
       </section>

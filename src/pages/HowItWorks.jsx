@@ -4,16 +4,16 @@ import { ShieldCheck, Upload, Eye, CreditCard, MessageSquare, CheckCircle } from
 
 const SELLER_STEPS = [
   { icon: ShieldCheck, title: "Verify Your Identity", desc: "Upload your National ID, selfie, and optional business documents. Our team reviews your submission." },
-  { icon: Upload, title: "Create a Listing", desc: "Fill in business details, upload photos, and set your asking price. Listing your business is completely free." },
+  { icon: Upload, title: "Create a Listing", desc: "Fill in business details, upload photos, and set your asking price. Choose a Basic (KES 2,000), Featured (KES 3,000) or Premium (KES 4,000) listing package and pay the applicable fee through M-Pesa." },
   { icon: Eye, title: "Listing Reviewed", desc: "Our team reviews your listing for completeness and quality. Approved listings go live on the marketplace." },
   { icon: MessageSquare, title: "Connect with Buyers", desc: "Receive detail requests from verified buyers. Approve requests to share confidential information and chat securely." },
 ];
 
 const BUYER_STEPS = [
   { icon: ShieldCheck, title: "Create an Account", desc: "Create an account with your phone number and 4-digit PIN." },
-  { icon: Eye, title: "Browse Businesses", desc: "Search established businesses across all 47 counties. View public details and photos." },
-  { icon: CreditCard, title: "Request Details", desc: "Submit a free request for confidential business information. Our team reviews each request before connecting you with the seller." },
-  { icon: CheckCircle, title: "Get Approved", desc: "Once the seller approves, access exact location, financial documents, supplier info, and seller contact." },
+  { icon: Eye, title: "Browse Businesses", desc: "Search established businesses by category, county, price and other public listing information." },
+  { icon: CreditCard, title: "Request Details", desc: "Pay the KES 1,000 detail-request fee through M-Pesa, then submit your request for confidential business information. The request moves through the platform approval process." },
+  { icon: CheckCircle, title: "Get Approved", desc: "When the request is approved, access the confidential information made available for that listing and continue the conversation through the platform." },
 ];
 
 export default function HowItWorks() {
@@ -69,7 +69,7 @@ export default function HowItWorks() {
 
         <div className="mt-16 text-center">
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/create-listing"><Button size="lg" className="font-body">Start Selling</Button></Link>
+            <Link to="/login?role=seller"><Button size="lg" className="font-body">Start Selling</Button></Link>
             <Link to="/browse"><Button size="lg" variant="outline" className="font-body">Browse Businesses</Button></Link>
           </div>
         </div>

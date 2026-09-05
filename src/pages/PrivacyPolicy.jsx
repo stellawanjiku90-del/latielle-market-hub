@@ -12,7 +12,7 @@ const SECTIONS = [
   },
   {
     title: "3. Data Storage & Security",
-    content: "All personal data is stored securely using industry-standard encryption and access controls. We take reasonable technical and organizational measures to protect your information against unauthorized access, loss, or misuse."
+    content: "We use access controls, authentication safeguards and other reasonable technical and organizational measures to protect personal information against unauthorized access, loss or misuse. No online service can guarantee absolute security."
   },
   {
     title: "4. Sharing of Information",
@@ -52,7 +52,7 @@ export default function PrivacyPolicy() {
           <ArrowLeft className="h-4 w-4" />Back to Home
         </Link>
         <h1 className="font-heading text-3xl font-bold mb-2">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: May 2025</p>
+        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: September 2026</p>
         <div className="space-y-8">
           {SECTIONS.map(section => (
             <div key={section.title}>

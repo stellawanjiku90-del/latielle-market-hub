@@ -40,7 +40,7 @@ export default function RefundPolicy() {
           <ArrowLeft className="h-4 w-4" />Back to Home
         </Link>
         <h1 className="font-heading text-3xl font-bold mb-2">Refund Policy</h1>
-        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: May 2025</p>
+        <p className="text-sm text-muted-foreground font-body mb-8">Last updated: September 2026</p>
         <div className="space-y-8">
           {SECTIONS.map(section => (
             <div key={section.title}>

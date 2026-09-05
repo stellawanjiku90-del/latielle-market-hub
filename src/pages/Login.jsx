@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Phone, Loader2, ShieldCheck, Shield, Store, ShoppingBag, KeyRound } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 
 export default function Login() {
   const { login, user, isAuthenticated, isLoadingAuth, dashboardFor } = useAuth();
-  const [step, setStep] = useState("role"); // role | phone | pin | signup-pin | payment | profile
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [searchParams] = useSearchParams();
+  const requestedRole = ["buyer", "seller"].includes(searchParams.get("role")) ? searchParams.get("role") : null;
+  const [step, setStep] = useState(requestedRole ? "phone" : "role"); // role | phone | pin | signup-pin | payment | profile
+  const [selectedRole, setSelectedRole] = useState(requestedRole);
   const [phone, setPhone] = useState("+254");
   const [pinCode, setPinCode] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
@@ -87,8 +89,8 @@ export default function Login() {
           return;
         }
         if (result.status === "failed") {
-          const details = [result.reason, result.resultCode != null ? `Result code: ${result.resultCode}` : ""].filter(Boolean).join(" ");
-          setError(details ? `M-Pesa payment was not completed. ${details}` : "M-Pesa payment was not completed. Please try again.");
+          const details = result.reason ? String(result.reason) : "M-Pesa payment was not completed. Please try again.";
+          setError(details);
           return;
         }
       } catch (err) { /* keep polling while payment is pending */ }
