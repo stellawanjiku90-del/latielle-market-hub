@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Business listing image unavailable</title>
+  <desc id="desc">A neutral storefront illustration for listings without a supplied image.</desc>
+  <rect width="1200" height="900" fill="#eef4f1"/>
+  <rect x="190" y="255" width="820" height="410" rx="28" fill="#ffffff" stroke="#c9d8d1" stroke-width="6"/>
+  <path d="M220 255h760l-52-125H272z" fill="#178451"/>
+  <path d="M272 130h708" stroke="#0f5f3a" stroke-width="10"/>
+  <path d="M245 255h710" stroke="#0f5f3a" stroke-width="8"/>
+  <rect x="310" y="335" width="230" height="230" rx="14" fill="#e6f1ec" stroke="#c9d8d1" stroke-width="5"/>
+  <rect x="660" y="335" width="230" height="145" rx="14" fill="#e6f1ec" stroke="#c9d8d1" stroke-width="5"/>
+  <rect x="660" y="505" width="230" height="60" rx="12" fill="#178451" opacity=".12"/>
+  <text x="600" y="730" text-anchor="middle" font-family="Georgia, serif" font-size="42" font-weight="700" fill="#17202a">Business image unavailable</text>
+  <text x="600" y="780" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#506070">LATIELLE MARKET HUB</text>
+</svg>
