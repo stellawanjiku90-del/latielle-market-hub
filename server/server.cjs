@@ -1476,11 +1476,39 @@ app.post('/api/auth/forgot-password', async (_req,res)=>res.json({success:true,m
 app.post('/api/auth/reset-password', async (_req,res)=>res.status(400).json({error:'Password reset is not available for phone/PIN accounts.'}));
 
 // Serve the production React build from the same Express process on Render.
+// Keep the document itself out of caches so a stale PWA shell cannot leave the
+// browser on a blank screen after a deployment. Fingerprinted Vite assets can
+// still be cached normally.
 const distPath = path.join(__dirname, '..', 'dist');
-app.use(express.static(distPath));
+const distIndex = path.join(distPath, 'index.html');
+app.use('/assets', express.static(path.join(distPath, 'assets'), {
+  immutable: true,
+  maxAge: '1y',
+}));
+app.get('/favicon.svg', (req, res) => res.sendFile(path.join(distPath, 'favicon.svg')));
+app.get('/site.webmanifest', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.sendFile(path.join(distPath, 'site.webmanifest'));
+});
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(distPath, 'sw.js'));
+});
+app.use(express.static(distPath, {
+  index: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-store, max-age=0');
+  },
+}));
+app.get('/', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.sendFile(distIndex, (error) => error && next(error));
+});
 app.get('/{*splat}', (req,res,next) => {
   if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(distPath, 'index.html'));
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.sendFile(distIndex, (error) => error && next(error));
 });
 
 /* =====================================================
