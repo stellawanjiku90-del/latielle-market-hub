@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /internal-admin-access
+Disallow: /staff-portal-login-7f4c2a
 Disallow: /api/
