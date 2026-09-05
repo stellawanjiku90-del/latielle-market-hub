@@ -44,3 +44,9 @@ services:
         sync: false
       - key: SUPPORT_NOTIFICATION_EMAIL
         value: realityofafrica2023@gmail.com
+      - key: VAPID_SUBJECT
+        value: mailto:realityofafrica2023@gmail.com
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
