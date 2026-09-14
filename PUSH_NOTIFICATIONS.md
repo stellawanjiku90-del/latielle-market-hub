@@ -2,7 +2,7 @@
 
 ## What is included
 
-Buyer accounts can opt in to browser push notifications from the Buyer Dashboard → Alerts.
+Buyer browser push notifications are registered automatically when supported. There is no in-app enable/disable control.
 
 Buyers receive:
 - **New business available** when an administrator publishes/approves a listing.
@@ -30,7 +30,7 @@ Copy the generated public and private keys into Render Environment → Environme
 
 ## Browser behavior
 
-A buyer must explicitly click **Enable notifications** and grant browser permission. Each browser/device gets its own subscription. Removing an expired subscription is handled automatically.
+Push registration is automatic. Each browser/device gets its own subscription, which is re-synced for the logged-in buyer. The browser/OS may still require the user to grant notification permission; websites cannot override a permission that the user has denied or a browser policy that requires a user gesture. Removing an in-app enable/disable control does not override browser-level notification settings. Expired subscriptions are handled automatically.
 
 Push delivery is best-effort: the in-app notification is still created even when a push endpoint is unavailable.
 
