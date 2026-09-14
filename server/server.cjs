@@ -363,7 +363,7 @@ app.get('/api/uploads/:id', optionalAuth, async (req, res, next) => {
    WEB PUSH NOTIFICATIONS
 ===================================================== */
 
-app.get('/api/push/public-key', auth(['buyer']), async (_req, res) => {
+app.get('/api/push/public-key', async (_req, res) => {
   if (!webPushReady()) return res.status(503).json({ error: 'Push notifications are not configured yet.' });
   res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
